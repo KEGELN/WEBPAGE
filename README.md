@@ -44,4 +44,9 @@ https://reactbits.dev/
 
 # TODO 
 Get Basic layout 
-
+/ -- root -> rediret to /home
+/home -- homepage with main menaue central search bar. 
+/search?q={query} (Searchfilters) -- search an result page with basic info about the players
+/player?pn={playername} oder /player?pid={Playerid} -- detailed report of the player 
+## Hopefully
+/compare?pn={playername} oder /player?pid1={Playerid}?
