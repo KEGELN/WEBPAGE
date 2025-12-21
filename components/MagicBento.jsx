@@ -10,40 +10,35 @@ const MOBILE_BREAKPOINT = 768;
 
 const cardData = [
   {
-    color: '#060010',
-    title: 'Player Name',
-    description: 'Player Team',
-    label: ''
+    title: 'Player Statistics',
+    description: 'Track performance metrics',
+    label: 'Player'
+
   },
   {
-    color: '#060010',
-    title: 'All time wins and Losses',
-    description: 'Centralized data view',
-    label: 'Overview' 
+    title: 'League Standings',
+    description: 'Current season rankings',
+    label: 'League'
   },
   {
-    color: '#060010',
-    title: 'Table of last Games',
-    description: 'Work together seamlessly',
-    label: 'Teamwork'
+    title: 'Game Results',
+    description: 'Latest match outcomes',
+    label: 'Games'
   },
   {
-    color: '#060010',
-    title: 'Automation',
-    description: 'Streamline workflows',
-    label: 'Efficiency'
+    title: 'Club Information',
+    description: 'Find local clubs',
+    label: 'Clubs'
   },
   {
-    color: '#060010',
-    title: 'Integration',
-    description: 'Connect favorite tools',
-    label: 'Connectivity'
+    title: 'Tournament Schedule',
+    description: 'Upcoming events',
+    label: 'Tournaments'
   },
   {
-    color: '#060010',
-    title: 'Security',
-    description: 'Enterprise-grade protection',
-    label: 'Protection'
+    title: 'District Overview',
+    description: 'Regional information',
+    label: 'Districts'
   }
 ];
 
@@ -340,7 +335,7 @@ const GlobalSpotlight = ({
       border-radius: 50%;
       pointer-events: none;
       background: radial-gradient(circle,
-        rgba(${glowColor}, 0.15) 0%,
+        var(--primary-glow) 0%,
         rgba(${glowColor}, 0.08) 15%,
         rgba(${glowColor}, 0.04) 25%,
         rgba(${glowColor}, 0.02) 40%,
@@ -506,7 +501,6 @@ const MagicBento = ({
           const cardProps = {
             className: baseClassName,
             style: {
-              backgroundColor: card.color,
               '--glow-color': glowColor
             }
           };

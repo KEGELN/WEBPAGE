@@ -1,0 +1,192 @@
+* 1. Begin by fetching current season and season id
+** Curl request:
+#+BEGIN_SRC shell
+curl 'https://skvb.sportwinner.de/php/skvb/service.php' \
+  -H 'Referer: https://skvb.sportwinner.de/' \
+  --data-raw 'command=GetSaisonArray'
+#+END_SRC
+
+#+RESULTS:
+| [["11" | 2025 | 0] | ["10" | 2024 | 1] | ["9" | 2023 | 1] | ["8" | 2022 | 1] | ["7" | 2021 | 1] | ["6" | 2020 | 1] | ["5" | 2019 | 1] | ["4" | 2018 | 1] | ["3" | 2017 | 1]] |
+
+** Response Structure:
+
+{{
+  season_id,
+  yearof_season,
+  status}
+  ...
+  }
+
+** Dataparameters
+command: GetSaisonArray
+
+* 2. GetKlub to get Sportclub information (maybe deprecheated)
+** 2.1 Curl request
+
+#+BEGIN_SRC shell
+    curl 'https://skvb.sportwinner.de/php/skvb/service.php' \
+    -H 'Referer: https://skvb.sportwinner.de/' \
+    -H 'X-Requested-With: XMLHttpRequest' \
+     --data-raw 'command=GetKlub&id_saison=11&nr_klub=&name_klub=ksc'
+
+#+END_SRC
+
+#+RESULTS:
+| [["2450" | 5301 | 1. KSC 1959 Seelow]] |
+
+** 2.2 response structure
+{{
+  ?????,
+  nr_club,
+  name_klub
+} ... }
+
+** 2.3 Dataparameters
+command:GetKlub
+id_saison: id from getSaisonId
+nr_club: 
+name_klub: inport/query für namen
+
+* 3. getBezirke
+** 3.1 Curl request
+#+BEGIN_SRC shell
+  curl 'https://skvb.sportwinner.de/php/skvb/service.php' \
+  -H 'Referer: https://skvb.sportwinner.de/' \
+  --data-raw 'command=GetBezirkArray&id_saison=11'
+#+END_SRC
+
+#+RESULTS:
+| [["44" | Elbe-Elster] | ["45" | M\u00e4rkisch-Oderland] | ["46" | Oberspreewald-Lausitz] | ["47" | Spree-Nei\u00dfe] | ["48" | Uckermark] | ["56" | Dahme-Spreewald]] |
+
+** 3.2 Response Structure
+{{
+  bezirk_id,
+  name_des_bezirks
+} ... }
+
+Note:
+In Sportwinner ist mit Bezirk einzelnde spiel/bereiche gemeint
+e.g. oberspreewald-Lausitz spiel in anderer region als Märkisch-Oderland
+
+** 3.3 dataparameters
+commnand: GetBezirkArray
+id_saison: id from getSaisonArray
+
+* 4 getLigaArray
+** 4.2 curl request
+
+#+BEGIN_SRC shell 
+  curl 'https://skvb.sportwinner.de/php/skvb/service.php' \
+  -H 'Referer: https://skvb.sportwinner.de/' \
+  --data-raw 'command=GetLigaArray&id_saison=11&id_bezirk=0&favorit=&art=1'
+#+END_SRC
+
+#+RESULTS:
+| [["3870" | 1 | M\u00e4nner - Verbandsliga | 0 | Schuppan, Alexander |   | 1605605461 |   | spielbetrieb-classic@skvb.de] | ["3871" | 1 | M\u00e4nner - Landesliga A Staffel I | 0 | Schuppan, Alexander |   | 1605605461 |   | spielbetrieb-classic@skvb.de] | ["3872" | 1 | M\u00e4nner - Landesliga B Staffel II | 0 | Schuppan, Alexander |   | 1605605461 |   | spielbetrieb-classic@skvb.de] | ["3873" | 1 | M\u00e4nner - Landesliga B Staffel III | 0 | Schuppan, Alexander |   | 1605605461 |   | spielbetrieb-classic@skvb.de] | ["3874" | 1 | Frauen - Verbandsliga | 0 | Schuppan, Alexander |   | 1605605461 |   | spielbetrieb-classic@skvb.de] | ["3875" | 1 | Frauen - Landesliga B | 0 | Schuppan, Alexander |   | 1605605461 |   | spielbetrieb-classic@skvb.de] | ["3879" | 1 | Jugend U 14 - Landesliga B m\u00e4nnlich | 0 | Bruhn, J\u00f6rg | +49 3574 465202 | +49 151 12624812 |   | auswertungen-classic@skvb.de] | ["3876" | 1 | Jugend U 14 - Landesliga B weiblich | 0 | Bruhn, J\u00f6rg | +49 3574 465202 | +49 151 12624812 |   | auswertungen-classic@skvb.de] | ["3878" | 1 | Jugend U 19 - Landesliga B m\u00e4nnlich | 0 | Bruhn, J\u00f6rg | +49 3574 465202 | +49 151 12624812 |   | auswertungen-classic@skvb.de] | ["3877" | 1 | Jugend U 19 - Landesliga B weiblich | 0 | Bruhn, J\u00f6rg | +49 3574 465202 | +49 151 12624812 |   | auswertungen-classic@skvb.de]] |
+
+** 4.2 response
+
+  [
+    "3596",                         sehr warscheinlich liga id
+    "1",                            ????
+    "Frauen - Landesliga A",        name der liga
+    "0",                            ???
+    "Bruhn, Jörg",                  name der ansprechpartner*in
+    "+49 3574 465202",              tel. nummer contact für ansprechpartner der liga
+    "+49 151 12624812",             tel. nummer contact für ansprechpartner der liga
+    "",                             Email contact für ansprechpartner der liga
+    "auswertungen-classic@skvb.de"  Email2 contact für ansprechpartner der liga
+  ]
+
+** 4.3 request
+command: getLigaArray
+is_saison: id von getSaisonArray
+id_bezirk: bezirk_id(auf null wenn nicht angegeben; filtern der ligen nur auf die region)
+favorit: nutzer fovorisierte liga id eg. männer 3870 zeigt dann nur noch diese liga an
+art:   ART = 1 (Daten vorhanden)
+       ART = 2 (Daten vorhanden)
+       ART = 3 (Leeres Array [])
+       ART = 4 (genutzt wenn favorit gesetz ist)
+       ART = 5 (Non-JSON)
+
+* 5 getSpieltagArray
+
+liste allter spieltage innerhalb der saison
+
+
+#+BEGIN_SRC shell
+  curl 'https://skvb.sportwinner.de/php/skvb/service.php' \
+  -H 'Origin: https://skvb.sportwinner.de' \
+  -H 'Referer: https://skvb.sportwinner.de/' \
+  --data-raw 'command=GetSpieltagArray&id_saison=11&id_liga=3931'
+#+END_SRC
+
+#+RESULTS:
+| [["98869" | 1 | 1. Spieltag | 1] | ["98870" | 2 | 2. Spieltag | 1] | ["98871" | 3 | 3. Spieltag | 1] | ["98872" | 4 | 4. Spieltag | 1] | ["98873" | 5 | 5. Spieltag | 1] | ["98874" | 6 | 6. Spieltag | 2] | ["98875" | 7 | 7. Spieltag | 2] | ["98876" | 8 | 8. Spieltag | 2] | ["98877" | 9 | 9. Spieltag | 2] | ["98878" | 10 | 10. Spieltag | 2] | ["98879" | 11 | 11. Spieltag | 2] | ["98880" | 12 | 12. Spieltag | 2] | ["98881" | 13 | 13. Spieltag | 2] | ["98882" | 14 | 14. Spieltag | 2]] |
+
+  [
+    "98881",            Spieltag_id
+    "13",               spieltag_nr
+    "13. Spieltag",     spieltag_name
+    "2"                 ??? status
+  ],
+
+
+command: getSpielTagArray
+id_saison: id from getSaisonId
+id_liga: id der liga in der man gerade schaut
+
+* 6 GetSpiel
+#+BEGIN_SRC shell
+curl 'https://skvb.sportwinner.de/php/skvb/service.php' \
+  -H 'Referer: https://skvb.sportwinner.de/' \
+  --data-raw 'command=GetSpiel&id_saison=11&id_klub=0&id_bezirk=44&id_liga=3931&id_spieltag=0&favorit=&art_bezirk=2&art_liga=0&art_spieltag=0'
+#+END_SRC
+
+#+RESULTS:
+| [["275650" | 06.12.2025 | 13:00 | KC Rot-Wei\u00df 1902 Bad Liebenwerda II | 0 | 0 | SV Zeischa I | 2 | 0 | verlegt |   | 1 | Gemischt \/ Kreisliga \/ 6. Spieltag | ] | ["275651" | 07.12.2025 | 09:00 | VfB Herzberg 68 II | 0 | 0 | SSV Gr\u00fcn-Wei\u00df Plessa II | 0 | 0 | offen |   | 1 | Gemischt \/ Kreisliga \/ 6. Spieltag | ]] |
+
+Verlegtes spiel
+[
+  [
+    "275650", Spiel_id 
+    "06.12.2025", spiel_datum
+    "13:00",     spiel_uhrzeit
+    "KC Rot-Weiß 1902 Bad Liebenwerda II",  team1_name 
+    "0",           ???
+    "0",           ???  
+    "SV Zeischa I",  team2_name
+    "2",      ???
+    "0",        ???
+    "verlegt",    spielstatus: wahrscheinlich enum: offen, verlegt, beendet
+    "", ???
+    "1", ???
+    "Gemischt / Kreisliga / 6. Spieltag", 
+    ""
+  ],
+
+*** fertiges spiel:
+command: GetSpiel
+id_saison: id von getSaisonId
+klub_id: null wenn nicht angegeben
+bezirks_id: select from user
+id_liga: selected liga from user
+id_spieltag: kann warscheinlich genutz werden um nach spieltag zu sortieren
+favorit: user selected favorit
+art_bezirk: ????
+art_liga: ???
+art_spieltag:???
+
+* 7 GetTabelle
+
+#+BEGIN_SRC shell
+  curl 'https://skvb.sportwinner.de/php/skvb/service.php' \
+  -H 'Referer: https://skvb.sportwinner.de/' \
+  --data-raw 'command=GetTabelle&id_saison=11&id_liga=3931&nr_spieltag=100&sort=0'
+#+END_SRC
+
+#+RESULTS:
+| [["31830" | 1 | SV Deutsche Eiche Kraupa I |   | 6 | 2 | 4 | 8 | 4 | 4 | 4 | 0 | 4 | 24 | 11 | 13 | 12 | 1 | 11 |   |   |   |   |   |   |   |   | ] | ["31834" | 2 | Hohenleipischer SV Lok I |   | 6 | 3 | 3 | 8 | 4 | 4 | 4 | 2 | 2 | 23 | 13 | 10 | 13 | 5 | 8 |   |   |   |   |   |   |   |   | ] | ["31835" | 3 | SV Bernsdorf 73 II |   | 6 | 2 | 4 | 7 | 4 | 3 | 5 | 0 | 5 | 19 | 9 | 10 | 17 | 3 | 14 |   |   |   |   |   |   |   |   | ] | ["31836" | 4 | Gr\u00e4fendorfer SV 1990 I |   | 7 | 4 | 3 | 7 | 6 | 1 | 7 | 2 | 5 | 20 | 16 | 4 | 22 | 8 | 14 |   |   |   |   |   |   |   |   | ] | ["31833" | 5 | SSV Gr\u00fcn-Wei\u00df Plessa II |   | 6 | 3 | 3 | 6 | 2 | 4 | 6 | 4 | 2 | 16 | 7 | 9 | 20 | 11 | 9 |   |   |   |   |   |   |   |   | ] | ["31831" | 6 | SV Zeischa I |   | 5 | 4 | 1 | 5 | 5 | 0 | 5 | 3 | 2 | 14,5 | 14,5 | 0 | 15,5 | 9,5 | 6 |   |   |   |   |   |   |   |   | ] | ["31837" | 7 | VfB Herzberg 68 II |   | 5 | 2 | 3 | 3 | 2 | 1 | 7 | 2 | 5 | 10,5 | 5 | 5,5 | 19,5 | 7 | 12,5 |   |   |   |   |   |   |   |   | ] | ["31832" | 8 | KC Rot-Wei\u00df 1902 Bad Liebenwerda II |   | 5 | 3 | 2 | 2 | 2 | 0 | 8 | 4 | 4 | 11 | 9 | 2 | 19 | 9 | 10 |   |   |   |   |   |   |   |   | ]] |
+
+

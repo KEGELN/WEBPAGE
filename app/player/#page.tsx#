@@ -1,0 +1,169 @@
+
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import MagicBento from '@/components/MagicBento';
+import Menubar from '@/components/menubar';
+import PlayerService from '@/lib/player-service';
+
+export default function Player() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const playerId = searchParams.get('id');
+  const [players, setPlayers] = useState<any[]>([]);
+  const [playerStats, setPlayerStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const playerService = new PlayerService();
+
+  // Fetch data based on whether we have a player ID
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        if (playerId) {
+          // Fetch specific player stats
+          const stats = await playerService.getPlayerStats(playerId);
+          setPlayerStats(stats);
+        } else {
+          // Fetch player schnitliste (list of players)
+          const playerList = await playerService.getPlayerSchnitliste();
+          setPlayers(playerList);
+        }
+      } catch (err) {
+        setError('Failed to load player data. Please try again.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [playerId]);
+
+  const handlePlayerClick = (playerId: string) => {
+    router.push(`/player?id=${playerId}`);
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Menubar />
+      <main className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground">
+            {playerId ? 'Player Details' : 'Player Overview'}
+          </h1>
+          <p className="text-muted-foreground">
+            {playerId
+              ? `Details for player: ${playerStats?.playerName || 'Loading...'}`
+              : 'Browse player statistics and information'}
+          </p>
+        </div>
+
+        {loading && (
+          <div className="flex justify-center items-center h-64">
+            <p className="text-lg">Loading player data...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && !playerId && players.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full bg-card rounded-lg overflow-hidden">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="py-3 px-4 text-left">ID</th>
+                  <th className="py-3 px-4 text-left">Name</th>
+                  <th className="py-3 px-4 text-left">Club</th>
+                  <th className="py-3 px-4 text-left">League</th>
+                  <th className="py-3 px-4 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {players.map((player, index) => (
+                  <tr
+                    key={player.id || index}
+                    className="border-b border-border hover:bg-accent/50 transition-colors cursor-pointer"
+                    onClick={() => handlePlayerClick(player.id)}
+                  >
+                    <td className="py-3 px-4">{player.id}</td>
+                    <td className="py-3 px-4 font-medium">{player.name}</td>
+                    <td className="py-3 px-4">{player.club || 'N/A'}</td>
+                    <td className="py-3 px-4">{player.league || 'N/A'}</td>
+                    <td className="py-3 px-4">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePlayerClick(player.id);
+                        }}
+                        className="text-primary hover:underline"
+                      >
+                        View Details
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!loading && !error && !playerId && players.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-lg text-muted-foreground">No players found</p>
+          </div>
+        )}
+
+        {!loading && !error && playerId && playerStats && (
+          <div className="space-y-8">
+            {/* Player Stats Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-card p-6 rounded-lg border border-border">
+                <h3 className="text-lg font-semibold mb-2">Games Played</h3>
+                <p className="text-3xl font-bold text-primary">{playerStats.gamesPlayed}</p>
+              </div>
+              <div className="bg-card p-6 rounded-lg border border-border">
+                <h3 className="text-lg font-semibold mb-2">Wins</h3>
+                <p className="text-3xl font-bold text-primary">{playerStats.wins}</p>
+              </div>
+              <div className="bg-card p-6 rounded-lg border border-border">
+                <h3 className="text-lg font-semibold mb-2">Losses</h3>
+                <p className="text-3xl font-bold text-primary">{playerStats.losses}</p>
+              </div>
+              <div className="bg-card p-6 rounded-lg border border-border">
+                <h3 className="text-lg font-semibold mb-2">Ranking</h3>
+                <p className="text-3xl font-bold text-primary">{playerStats.ranking}</p>
+              </div>
+            </div>
+
+            {/* Player Bento Results */}
+            <div className="mt-12 max-w-5xl mx-auto">
+              <h2 className="text-2xl font-bold mb-6 text-center">Player Performance</h2>
+              <MagicBento />
+            </div>
+
+            {/* Back to player list */}
+            <div className="mt-8 text-center">
+              <button
+                onClick={() => router.push('/player')}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+              >
+                Back to Player List
+              </button>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

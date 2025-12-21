@@ -1,0 +1,74 @@
+// server/player-handler.ts
+
+export interface Player {
+  id: string;
+  name: string;
+  club?: string;
+}
+
+export interface PlayerStats {
+  playerId: string;
+  playerName: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  averageScore?: number;
+}
+
+export class PlayerHandler {
+
+  async getPlayerSchnitliste(seasonId?: string): Promise<Player[]> {
+    const body = new URLSearchParams({
+      command: 'GetSchnitt',
+      id_saison: seasonId ?? '11',
+      id_klub: '0',
+      id_liga: '3872',
+      nr_spieltag: '100',
+      sort: '2',
+      anzahl: '1'
+    });
+
+    const response = await fetch(
+      'https://skvb.sportwinner.de/php/skvb/service.php',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Origin: 'https://skvb.sportwinner.de',
+          Referer: 'https://skvb.sportwinner.de/'
+        },
+        body: body.toString()
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const rawData: any[][] = await response.json();
+
+    return rawData.map(row => ({
+      id: String(row[0]),
+      name: row[1],
+      club: row[2]
+    }));
+  }
+
+  async getPlayerStats(playerId: string): Promise<PlayerStats> {
+    console.log(
+      'API call intercepted for getPlayerStats with playerId:',
+      playerId
+    );
+
+    // Placeholder until real endpoint exists
+    return {
+      playerId,
+      playerName: `Player ${playerId}`,
+      gamesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      averageScore: 0
+    };
+  }
+
+}
