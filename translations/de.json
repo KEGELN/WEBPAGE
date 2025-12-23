@@ -1,0 +1,130 @@
+{
+  "home": {
+    "title": "besonders coole homepage",
+    "backToHome": "Zurück zur Startseite"
+  },
+  "common": {
+    "home": "Startseite",
+    "player": "Spieler",
+    "scores": "Ergebnisse",
+    "tournaments": "Turniere",
+    "search": "Vereine, Spieler suchen...",
+    "github": "GitHub",
+    "language": "Sprache",
+    "na": "N/V"
+  },
+  "navigation": {
+    "home": "Startseite",
+    "player": "Spieler",
+    "scores": "Ergebnisse",
+    "tournaments": "Turniere"
+  },
+  "search": {
+    "placeholder": "Vereine, Spieler suchen...",
+    "ariaLabel": "Suchen",
+    "title": "Suchergebnisse",
+    "results": {
+      "for": "Ergebnisse für",
+      "clubType": "Verein",
+      "clubDescription": "Kegelverein",
+      "playerType": "Spieler",
+      "playerDescription": "Spieler bei",
+      "districtType": "Bezirk",
+      "districtDescription": "Region für Kegelsport",
+      "leagueType": "Liga",
+      "leagueContact": "Kontakt:",
+      "leagueDescription": "Kegelliga",
+      "teamType": "team"
+    },
+    "error": {
+      "message": "Fehler bei der Suche. Bitte versuchen Sie es erneut."
+    },
+    "loading": "Suchergebnisse werden geladen...",
+    "noResults": "Keine",
+    "noResultsFound": "Ergebnisse gefunden für",
+    "filters": {
+      "all": "Alle",
+      "clubs": "Vereine",
+      "players": "Spieler",
+      "leagues": "Ligen & Bezirke"
+    },
+    "start": {
+      "title": "Kegel-Vereine, Spieler & Ligen suchen",
+      "description": "Geben Sie oben einen Suchbegriff ein, um zu beginnen"
+    }
+  },
+  "theme": {
+    "toggle": "Design wechseln",
+    "dark": "Dunkler Modus",
+    "light": "Heller Modus"
+  },
+  "languageSelector": {
+    "ariaLabel": "Sprache auswählen",
+    "german": "Deutsch",
+    "english": "Englisch"
+  },
+  "player": {
+    "loading": "Spielerdaten werden geladen...",
+    "noPlayers": "Keine Spieler gefunden",
+    "backToList": "Zurück zur Spielerliste",
+    "details": {
+      "title": "Spielerdetails",
+      "description": "Details für Spieler:"
+    },
+    "overview": {
+      "title": "Spielerübersicht",
+      "description": "Spielerstatistiken und Informationen durchsuchen"
+    },
+    "filters": {
+      "season": "Saison",
+      "allSeasons": "Alle Saisons",
+      "league": "Liga",
+      "allLeagues": "Alle Ligen"
+    },
+    "table": {
+      "rank": "Rang",
+      "name": "Name",
+      "club": "Verein",
+      "category": "Kategorie",
+      "games": "Spiele",
+      "wins": "Siege",
+      "losses": "Niederlagen",
+      "total": "Gesamt",
+      "average": "Durchschnitt",
+      "schnitt": "Schnitt",
+      "actions": "Aktionen",
+      "viewDetails": "Details anzeigen"
+    },
+    "category": {
+      "default": "Männer"
+    },
+    "stats": {
+      "gamesPlayed": "Gespielte Spiele",
+      "totalGames": "Gesamte Spiele",
+      "wins": "Siege",
+      "totalWins": "Gesamtsiege",
+      "losses": "Niederlagen",
+      "totalLosses": "Gesamtniederlagen",
+      "ranking": "Rang",
+      "currentRanking": "Aktueller Rang"
+    },
+    "performance": {
+      "title": "Spielerleistung",
+      "stats": "Spielerstatistiken",
+      "description": "Statistiken zur Spielerleistung",
+      "gamesPlayed": "Gespielte Spiele",
+      "wins": "Siege",
+      "losses": "Niederlagen",
+      "ranking": "Rang",
+      "averageScore": "Durchschnittspunktzahl"
+    },
+    "detailed": {
+      "title": "Detaillierte Statistiken",
+      "playerName": "Spielername",
+      "averageScore": "Durchschnittspunktzahl"
+    },
+    "error": {
+      "loading": "Fehler beim Laden der Spielerdaten. Bitte versuchen Sie es erneut."
+    }
+  }
+}

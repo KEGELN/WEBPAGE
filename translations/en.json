@@ -1,0 +1,130 @@
+{
+  "home": {
+    "title": "besonders coole homepage",
+    "backToHome": "Back to Home"
+  },
+  "common": {
+    "home": "Home",
+    "player": "Player",
+    "scores": "Scores",
+    "tournaments": "Tournaments",
+    "search": "Search clubs, players...",
+    "github": "GitHub",
+    "language": "Language",
+    "na": "N/A"
+  },
+  "navigation": {
+    "home": "Home",
+    "player": "Player",
+    "scores": "Scores",
+    "tournaments": "Tournaments"
+  },
+  "search": {
+    "placeholder": "Search clubs, players...",
+    "ariaLabel": "Search",
+    "title": "Search Results",
+    "results": {
+      "for": "Results for",
+      "clubType": "Club",
+      "clubDescription": "Kegel club",
+      "playerType": "Player",
+      "playerDescription": "Player at",
+      "districtType": "District",
+      "districtDescription": "Region for kegel sport",
+      "leagueType": "League",
+      "leagueContact": "Contact:",
+      "leagueDescription": "Kegel league",
+      "teamType": "team"
+    },
+    "error": {
+      "message": "Failed to perform search. Please try again."
+    },
+    "loading": "Loading search results...",
+    "noResults": "No",
+    "noResultsFound": "results found for",
+    "filters": {
+      "all": "All",
+      "clubs": "Clubs",
+      "players": "Players",
+      "leagues": "Leagues & Districts"
+    },
+    "start": {
+      "title": "Search Kegel Clubs, Players & Leagues",
+      "description": "Enter a search term above to get started"
+    }
+  },
+  "theme": {
+    "toggle": "Toggle theme",
+    "dark": "Dark mode",
+    "light": "Light mode"
+  },
+  "languageSelector": {
+    "ariaLabel": "Select language",
+    "german": "German",
+    "english": "English"
+  },
+  "player": {
+    "loading": "Loading player data...",
+    "noPlayers": "No players found",
+    "backToList": "Back to Player List",
+    "details": {
+      "title": "Player Details",
+      "description": "Details for player:"
+    },
+    "overview": {
+      "title": "Player Overview",
+      "description": "Browse player statistics and information"
+    },
+    "filters": {
+      "season": "Season",
+      "allSeasons": "All Seasons",
+      "league": "League",
+      "allLeagues": "All Leagues"
+    },
+    "table": {
+      "rank": "Rank",
+      "name": "Name",
+      "club": "Club",
+      "category": "Category",
+      "games": "Games",
+      "wins": "Wins",
+      "losses": "Losses",
+      "total": "Total",
+      "average": "Average",
+      "schnitt": "Schnitt",
+      "actions": "Actions",
+      "viewDetails": "View Details"
+    },
+    "category": {
+      "default": "Männer"
+    },
+    "stats": {
+      "gamesPlayed": "Games Played",
+      "totalGames": "Total games played",
+      "wins": "Wins",
+      "totalWins": "Total wins",
+      "losses": "Losses",
+      "totalLosses": "Total losses",
+      "ranking": "Ranking",
+      "currentRanking": "Current ranking"
+    },
+    "performance": {
+      "title": "Player Performance",
+      "stats": "Player Stats",
+      "description": "Player Performance Statistics",
+      "gamesPlayed": "Games Played",
+      "wins": "Wins",
+      "losses": "Losses",
+      "ranking": "Ranking",
+      "averageScore": "Average Score"
+    },
+    "detailed": {
+      "title": "Detailed Statistics",
+      "playerName": "Player Name",
+      "averageScore": "Average Score"
+    },
+    "error": {
+      "loading": "Failed to load player data. Please try again."
+    }
+  }
+}

@@ -252,8 +252,7 @@ interface Player {
   games?: number;
   wins?: number;
   losses?: number;
-  total?: number;
-  average?: string;
+  total?: numbe  average?: string;
   schnitt?: string;
 }
 

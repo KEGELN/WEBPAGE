@@ -18,13 +18,16 @@ export default function Player() {
   const [error, setError] = useState<string | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<string>('');
   const [selectedLeague, setSelectedLeague] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [seasons, setSeasons] = useState<any[]>([]);
   const [leagues, setLeagues] = useState<any[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   const playerService = new PlayerService();
   const apiService = ApiService.getInstance();
 
-  // Fetch seasons and leagues when component mounts
+  // Fetch seasons, leagues, and categories when component mounts
   useEffect(() => {
     const fetchFilters = async () => {
       try {
@@ -43,6 +46,16 @@ export default function Player() {
     fetchFilters();
   }, []);
 
+  // Extract unique categories from players data when players change
+  useEffect(() => {
+    if (players && players.length > 0) {
+      const uniqueCategories = Array.from(
+        new Set(players.map(player => player.category || 'Männer'))
+      ).sort();
+      setCategories(uniqueCategories);
+    }
+  }, [players]);
+
   // Fetch data based on whether we have a player ID
   useEffect(() => {
     const fetchData = async () => {
@@ -55,7 +68,7 @@ export default function Player() {
           const stats = await playerService.getPlayerStats(playerId);
           setPlayerStats(stats);
         } else {
-          // Fetch player schnitliste (list of players) with season and league filters
+          // Fetch player schnitliste (list of players) with season, league, and category filters
           const playerList = await playerService.getPlayerSchnitliste(selectedSeason, selectedLeague);
           setPlayers(playerList);
         }
@@ -73,6 +86,87 @@ export default function Player() {
     }
   }, [playerId, selectedSeason, selectedLeague]);
 
+  // Sort players based on sortConfig
+  const sortedPlayers = [...players].sort((a, b) => {
+    if (!sortConfig) return 0;
+
+    // Determine the values to compare based on the sort key
+    let aValue: any, bValue: any;
+    switch (sortConfig.key) {
+      case 'rank':
+        // For rank, we don't sort by this column specifically, as it's just the display index
+        // If sorting by rank, we can sort by average (schnitt) as the primary metric
+        aValue = parseFloat((a.average || a.schnitt || '0').replace(',', '.'));
+        bValue = parseFloat((b.average || b.schnitt || '0').replace(',', '.'));
+        break;
+      case 'name':
+        aValue = a.name || '';
+        bValue = b.name || '';
+        break;
+      case 'club':
+        aValue = a.club || '';
+        bValue = b.club || '';
+        break;
+      case 'totalGames':
+        aValue = parseInt(a.totalGames || a.games || 0);
+        bValue = parseInt(b.totalGames || b.games || 0);
+        break;
+      case 'average':
+        // Convert German decimal notation (comma) to a number for comparison
+        aValue = parseFloat((a.average || a.schnitt || '0').replace(',', '.'));
+        bValue = parseFloat((b.average || b.schnitt || '0').replace(',', '.'));
+        break;
+      case 'points':
+        aValue = parseInt(a.points || 0);
+        bValue = parseInt(b.points || 0);
+        break;
+      case 'homeGames':
+        aValue = parseInt(a.homeGames || 0);
+        bValue = parseInt(b.homeGames || 0);
+        break;
+      case 'homeAverage':
+        aValue = parseFloat((a.homeAverage || '0').replace(',', '.'));
+        bValue = parseFloat((b.homeAverage || '0').replace(',', '.'));
+        break;
+      case 'homePoints':
+        aValue = parseInt(a.homePoints || 0);
+        bValue = parseInt(b.homePoints || 0);
+        break;
+      case 'awayGames':
+        aValue = parseInt(a.awayGames || 0);
+        bValue = parseInt(b.awayGames || 0);
+        break;
+      case 'awayAverage':
+        aValue = parseFloat((a.awayAverage || '0').replace(',', '.'));
+        bValue = parseFloat((b.awayAverage || '0').replace(',', '.'));
+        break;
+      case 'awayPoints':
+        aValue = parseInt(a.awayPoints || 0);
+        bValue = parseInt(b.awayPoints || 0);
+        break;
+      case 'best':
+        aValue = parseInt(a.best || 0);
+        bValue = parseInt(b.best || 0);
+        break;
+      default:
+        return 0;
+    }
+
+    // Perform the comparison
+    if (aValue < bValue) {
+      return sortConfig.direction === 'asc' ? -1 : 1;
+    }
+    if (aValue > bValue) {
+      return sortConfig.direction === 'asc' ? 1 : -1;
+    }
+    return 0;
+  });
+
+  // Filter players based on selected category
+  const filteredPlayers = selectedCategory
+    ? sortedPlayers.filter(player => (player.category || 'Männer') === selectedCategory)
+    : sortedPlayers;
+
   // Handle season filter change
   const handleSeasonChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedSeason(e.target.value);
@@ -85,6 +179,14 @@ export default function Player() {
 
   const handlePlayerClick = (playerId: string) => {
     router.push(`/player?id=${playerId}`);
+  };
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
   };
 
   return (
@@ -101,7 +203,7 @@ export default function Player() {
               : 'Browse player statistics and information'}
           </p>
 
-          {/* Filter controls for seasons and leagues */}
+          {/* Filter controls for seasons, leagues, and categories */}
           {!playerId && (
             <div className="mt-4 flex flex-wrap gap-4 items-end">
               <div className="flex flex-col">
@@ -141,6 +243,25 @@ export default function Player() {
                   ))}
                 </select>
               </div>
+
+              <div className="flex flex-col">
+                <label htmlFor="categoryFilter" className="text-sm font-medium text-foreground mb-1">
+                  Kategorie
+                </label>
+                <select
+                  id="categoryFilter"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">All Categories</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
         </div>
@@ -158,51 +279,115 @@ export default function Player() {
         )}
 
         {!loading && !error && !playerId && players.length > 0 && (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-lg border border-border">
             <table className="min-w-full bg-card rounded-lg overflow-hidden border border-border">
               <thead className="bg-muted">
                 <tr>
-                  <th className="py-3 px-4 text-left text-foreground">Rank</th>
-                  <th className="py-3 px-4 text-left text-foreground">Name</th>
-                  <th className="py-3 px-4 text-left text-foreground">Club</th>
-                  <th className="py-3 px-4 text-left text-foreground">Category</th>
-                  <th className="py-3 px-4 text-left text-foreground">Games</th>
-                  <th className="py-3 px-4 text-left text-foreground">Wins</th>
-                  <th className="py-3 px-4 text-left text-foreground">Losses</th>
-                  <th className="py-3 px-4 text-left text-foreground">Total</th>
-                  <th className="py-3 px-4 text-left text-foreground">Average</th>
-                  <th className="py-3 px-4 text-left text-foreground">Schnitt</th>
-                  <th className="py-3 px-4 text-left text-foreground">Actions</th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
+                    onClick={() => handleSort('rank')}
+                  >
+                    Pl.
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
+                    onClick={() => handleSort('name')}
+                  >
+                    Spieler
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
+                    onClick={() => handleSort('club')}
+                  >
+                    Klub
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
+                    onClick={() => handleSort('totalGames')}
+                  >
+                    Sp.
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
+                    onClick={() => handleSort('average')}
+                  >
+                    ∅
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
+                    onClick={() => handleSort('points')}
+                  >
+                    MP
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
+                    onClick={() => handleSort('homeGames')}
+                  >
+                    Sp. (Heim)
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
+                    onClick={() => handleSort('homeAverage')}
+                  >
+                    ∅ (Heim)
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
+                    onClick={() => handleSort('homePoints')}
+                  >
+                    MP (Heim)
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
+                    onClick={() => handleSort('awayGames')}
+                  >
+                    Sp. (Ausw)
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
+                    onClick={() => handleSort('awayAverage')}
+                  >
+                    ∅ (Ausw)
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
+                    onClick={() => handleSort('awayPoints')}
+                  >
+                    MP (Ausw)
+                  </th>
+                  <th
+                    className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
+                    onClick={() => handleSort('best')}
+                  >
+                    Best
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {players.map((player, index) => (
+                {filteredPlayers.map((player, index) => (
                   <tr
                     key={player.id || index}
                     className="border-b border-border hover:bg-accent/50 transition-colors cursor-pointer"
                     onClick={() => handlePlayerClick(player.id)}
                   >
-                    <td className="py-3 px-4">{player.id}</td>
-                    <td className="py-3 px-4 font-medium text-foreground">{player.name}</td>
-                    <td className="py-3 px-4 text-foreground">{player.club || 'N/A'}</td>
-                    <td className="py-3 px-4 text-foreground">{player.category || 'Männer'}</td>
-                    <td className="py-3 px-4 text-foreground">{player.games || 4}</td>
-                    <td className="py-3 px-4 text-foreground">{player.wins || 4}</td>
-                    <td className="py-3 px-4 text-foreground">{player.losses || 8}</td>
-                    <td className="py-3 px-4 text-foreground">{player.total || 589}</td>
-                    <td className="py-3 px-4 text-foreground">{player.average || '600,25'}</td>
-                    <td className="py-3 px-4 text-foreground">{player.schnitt || '594,63'}</td>
-                    <td className="py-3 px-4">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePlayerClick(player.id);
-                        }}
-                        className="text-primary hover:underline"
-                      >
-                        View Details
-                      </button>
+                    <td className="py-3 px-4">{index + 1}</td>
+                    <td className="py-3 px-4 font-medium text-foreground">
+                      <div className="flex items-center">
+                        <span>{player.name}</span>
+                        <span className="ml-2 text-sm text-muted-foreground less720px">{player.category || 'Männer'}</span>
+                      </div>
                     </td>
+                    <td className="py-3 px-4 text-foreground">{player.club || 'N/A'}</td>
+                    <td className="py-3 px-4 text-foreground">{player.totalGames || player.games || 4}</td>
+                    <td className="py-3 px-4 text-foreground">{player.average || player.schnitt || '594,63'}</td>
+                    <td className="py-3 px-4 text-foreground">{player.points || 5}</td>
+                    <td className="py-3 px-4 text-foreground less720px">{player.homeGames || 2}</td>
+                    <td className="py-3 px-4 text-foreground less720px">{player.homeAverage || '600,25'}</td>
+                    <td className="py-3 px-4 text-foreground less720px">{player.homePoints || 3}</td>
+                    <td className="py-3 px-4 text-foreground less720px">{player.awayGames || 2}</td>
+                    <td className="py-3 px-4 text-foreground less720px">{player.awayAverage || '589,12'}</td>
+                    <td className="py-3 px-4 text-foreground less720px">{player.awayPoints || 2}</td>
+                    <td className="py-3 px-4 text-foreground less720px">{player.best || '654'}</td>
                   </tr>
                 ))}
               </tbody>

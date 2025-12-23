@@ -166,7 +166,7 @@ export default function SearchPage() {
           <div className="max-w-4xl mx-auto space-y-4">
             {filteredResults.map((result) => (
               <div
-                key={result.id}
+                key={`${result.type}-${result.id}`}
                 className="border border-border rounded-lg p-4 hover:bg-muted/50 transition-colors"
               >
                 <div className="flex justify-between items-start">

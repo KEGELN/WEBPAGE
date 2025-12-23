@@ -1,0 +1,498 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<title>API.html</title>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+
+</head>
+
+<body>
+
+<h1>API Documentation for Kegel Website</h1>
+<h2>Table of Contents</h2>
+<ol>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#architecture-diagram">Architecture Diagram</a></li>
+<li><a href="#api-paths-visualization">API Paths Visualization</a></li>
+<li><a href="#current-implementation">Current Implementation</a></li>
+<li><a href="#api-endpoints">API Endpoints</a></li>
+<li><a href="#json-api-schema">JSON API Schema</a></li>
+<li><a href="#how-to-edit-and-extend-the-api">How to Edit and Extend the API</a></li>
+<li><a href="#best-practices">Best Practices</a></li>
+<li><a href="#testing">Testing</a></li>
+</ol>
+<h2>Overview</h2>
+<p>This document describes the API management system for the Kegel (bowling/kegeln) website. The API acts as a proxy to the SportWinner backend service, which provides data about seasons, clubs, leagues, games, and standings for German kegeln associations.</p>
+<p>The API follows RESTful principles with a proxy pattern, intercepting requests originally destined for <code>https://skvb.sportwinner.de/php/skvb/service.php</code> and returning mock/example data that matches the SportWinner API format.</p>
+<h2>Architecture Diagram</h2>
+<p>```mermaid
+graph TB
+    A[Browser/Frontend] --&gt; B[Next.js App]
+    B --&gt; C[API Route: /api/sportwinner]
+    C --&gt; D[Server Handler: APIHandler]
+    D --&gt; E[Mock Data Store]
+    E --&gt; F[Formatted Response]
+    D --&gt; G[Real SportWinner API - Future]</p>
+<pre><code>A -.-&gt; H[SportWinner Backend]
+C -.-&gt; H
+
+style D fill:#e1f5fe
+style E fill:#f3e5f5
+style C fill:#e8f5e8
+</code></pre>
+<p>```</p>
+<h3>Component Flow</h3>
+<p>```mermaid
+sequenceDiagram
+    participant Frontend as Browser/Client
+    participant NextJS as Next.js Application
+    participant APIRoute as API Route (/api/sportwinner)
+    participant ServerHandler as Server Handler (APIHandler)
+    participant MockDB as Mock Data Store</p>
+<pre><code>Frontend-&gt;&gt;NextJS: Request to /api/sportwinner
+NextJS-&gt;&gt;APIRoute: POST/GET request with command
+APIRoute-&gt;&gt;ServerHandler: Parse command and parameters
+ServerHandler-&gt;&gt;MockDB: Retrieve mock data
+MockDB--&gt;&gt;ServerHandler: Return mock data
+ServerHandler--&gt;&gt;APIRoute: Format response
+APIRoute--&gt;&gt;Frontend: Send response in SportWinner format
+</code></pre>
+<p>```</p>
+<h2>API Paths Visualization</h2>
+<h3>Main API Structure</h3>
+<p>```mermaid
+graph TD
+    A[API Root: /api/sportwinner] --&gt; B[POST Request]
+    A --&gt; C[GET Request]</p>
+<pre><code>B --&gt; B1[Command Parameter]
+C --&gt; C1[Command Query Parameter]
+
+B1 --&gt; B11[GetSaisonArray]
+B1 --&gt; B12[GetKlub]
+B1 --&gt; B13[GetBezirkArray]
+B1 --&gt; B14[GetLigaArray]
+B1 --&gt; B15[GetSpiel]
+B1 --&gt; B16[GetTabelle]
+B1 --&gt; B17[GetSchnitt]
+B1 --&gt; B18[GetSpieltagArray]
+
+C1 --&gt; C11[GetSaisonArray]
+C1 --&gt; C12[GetKlub]
+C1 --&gt; C13[GetBezirkArray]
+C1 --&gt; C14[GetLigaArray]
+C1 --&gt; C15[GetSpiel]
+C1 --&gt; C16[GetTabelle]
+C1 --&gt; C17[GetSchnitt]
+C1 --&gt; C18[GetSpieltagArray]
+
+B11 --&gt; B111[Response: Season Array]
+B12 --&gt; B121[Response: Club Array]
+B13 --&gt; B131[Response: District Array]
+B14 --&gt; B141[Response: League Array]
+B15 --&gt; B151[Response: Game Array]
+B16 --&gt; B161[Response: Standings Array]
+B17 --&gt; B171[Response: Player Stats Array]
+B18 --&gt; B181[Response: Matchday Array]
+
+C11 --&gt; C111[Response: Season Array]
+C12 --&gt; C121[Response: Club Array]
+C13 --&gt; C131[Response: District Array]
+C14 --&gt; C141[Response: League Array]
+C15 --&gt; C151[Response: Game Array]
+C16 --&gt; C161[Response: Standings Array]
+C17 --&gt; C171[Response: Player Stats Array]
+C18 --&gt; C181[Response: Matchday Array]
+</code></pre>
+<p>```</p>
+<h3>API Request Flow</h3>
+<p><code>mermaid
+flowchart LR
+    A[Client Request] --&gt; B{Method Type}
+    B --&gt;|POST| C[Parse Body Parameters]
+    B --&gt;|GET| D[Parse Query Parameters]
+    C --&gt; E[Extract Command Parameter]
+    D --&gt; E
+    E --&gt; F{Command Type}
+    F --&gt;|GetSaisonArray| G[Get Seasons]
+    F --&gt;|GetKlub| H[Search Clubs]
+    F --&gt;|GetBezirkArray| I[Get Districts]
+    F --&gt;|GetLigaArray| J[Get Leagues]
+    F --&gt;|GetSpiel| K[Get Games]
+    F --&gt;|GetTabelle| L[Get Standings]
+    F --&gt;|GetSchnitt| M[Get Player Stats]
+    F --&gt;|GetSpieltagArray| N[Get Match Days]
+    G --&gt; O[Format Response]
+    H --&gt; O
+    I --&gt; O
+    J --&gt; O
+    K --&gt; O
+    L --&gt; O
+    M --&gt; O
+    N --&gt; O
+    O --&gt; P[Return JSON Response]</code></p>
+<h2>Current Implementation</h2>
+<p>The API is implemented using the following components:</p>
+<h3>1. Server Handler (<code>server/api-handler.ts</code>)</h3>
+<ul>
+<li>Contains the <code>APIHandler</code> class with methods for each SportWinner API command</li>
+<li>Provides mock data for all API endpoints</li>
+<li>Interfaces with the SportWinner API format while abstracting the implementation</li>
+<li>Implements proper error handling and logging</li>
+</ul>
+<h3>2. API Route (<code>app/api/sportwinner/route.ts</code>)</h3>
+<ul>
+<li>Next.js API route that handles POST and GET requests</li>
+<li>Parses commands from request body or query parameters</li>
+<li>Routes requests to appropriate methods in the APIHandler</li>
+<li>Formats responses to match SportWinner API format</li>
+<li>Implements proper HTTP status codes</li>
+</ul>
+<h3>3. Data Structures</h3>
+<ul>
+<li>Types defined for Seasons, Clubs, Districts, Leagues, and Players</li>
+<li>Consistent data structures that match the SportWinner API format</li>
+<li>Easy to extend for additional fields or entities</li>
+</ul>
+<h2>API Endpoints</h2>
+<h3>Base Endpoint</h3>
+<p><code>POST /api/sportwinner</code> or <code>GET /api/sportwinner</code></p>
+<h3>Supported Commands</h3>
+<h4>1. GetSaisonArray</h4>
+<ul>
+<li><strong>Purpose</strong>: Retrieve available seasons</li>
+<li><strong>Method</strong>: POST or GET</li>
+<li><strong>Parameters</strong>: None</li>
+<li><strong>Response</strong>: Array of seasons with ID, year, and status</li>
+<li><strong>Example Response</strong>: <code>[["11", 2025, 0], ["10", 2024, 1]]</code></li>
+<li><strong>HTTP Status</strong>: 200 OK</li>
+</ul>
+<h4>2. GetKlub</h4>
+<ul>
+<li><strong>Purpose</strong>: Search for clubs by name or number</li>
+<li><strong>Method</strong>: POST or GET</li>
+<li><strong>Parameters</strong>: <code>name_klub</code> (optional), <code>nr_klub</code> (optional)</li>
+<li><strong>Response</strong>: Array of club information</li>
+<li><strong>Example Response</strong>: <code>[["1", "001", "BSV GW Friedrichshain"]]</code></li>
+<li><strong>HTTP Status</strong>: 200 OK</li>
+</ul>
+<h4>3. GetBezirkArray</h4>
+<ul>
+<li><strong>Purpose</strong>: Get districts/regions for the selected season</li>
+<li><strong>Method</strong>: POST or GET</li>
+<li><strong>Parameters</strong>: <code>id_saison</code></li>
+<li><strong>Response</strong>: Array of districts</li>
+<li><strong>Example Response</strong>: <code>[["1", "Berlin"], ["2", "Brandenburg"]]</code></li>
+<li><strong>HTTP Status</strong>: 200 OK</li>
+</ul>
+<h4>4. GetLigaArray</h4>
+<ul>
+<li><strong>Purpose</strong>: Get leagues for the selected season and district</li>
+<li><strong>Method</strong>: POST or GET</li>
+<li><strong>Parameters</strong>: <code>id_saison</code>, <code>id_bezirk</code>, <code>favorit</code>, <code>art</code></li>
+<li><strong>Response</strong>: Array of league information with contact details</li>
+<li><strong>Example Response</strong>: <code>[["1", "Liga 1", "Bezirksliga Berlin", ...]]</code></li>
+<li><strong>HTTP Status</strong>: 200 OK</li>
+</ul>
+<h4>5. GetSpiel</h4>
+<ul>
+<li><strong>Purpose</strong>: Get games for the selected criteria</li>
+<li><strong>Method</strong>: POST or GET</li>
+<li><strong>Parameters</strong>: <code>id_saison</code>, <code>id_klub</code>, <code>id_bezirk</code>, <code>id_liga</code>, <code>id_spieltag</code>, <code>favorit</code>, <code>art_bezirk</code>, <code>art_liga</code>, <code>art_spieltag</code></li>
+<li><strong>Response</strong>: Array of game information</li>
+<li><strong>Example Response</strong>: <code>[["1", "2025-01-15", "19:00", ...]]</code></li>
+<li><strong>HTTP Status</strong>: 200 OK</li>
+</ul>
+<h4>6. GetTabelle</h4>
+<ul>
+<li><strong>Purpose</strong>: Get league standings</li>
+<li><strong>Method</strong>: POST or GET</li>
+<li><strong>Parameters</strong>: <code>id_saison</code>, <code>id_liga</code>, <code>nr_spieltag</code>, <code>sort</code></li>
+<li><strong>Response</strong>: Array of team standings</li>
+<li><strong>Example Response</strong>: <code>[["1", "1", "BSV GW Friedrichshain", ...]]</code></li>
+<li><strong>HTTP Status</strong>: 200 OK</li>
+</ul>
+<h4>7. GetSchnitt</h4>
+<ul>
+<li><strong>Purpose</strong>: Get player statistics/scores</li>
+<li><strong>Method</strong>: POST or GET</li>
+<li><strong>Parameters</strong>: <code>id_saison</code>, <code>id_liga</code>, <code>id_klub</code>, <code>nr_spieltag</code>, <code>sort</code>, <code>anzahl</code></li>
+<li><strong>Response</strong>: Array of player statistics</li>
+<li><strong>Example Response</strong>: <code>[[1,"Böse, Stefan","BSV GW Friedrichshain",...]]</code></li>
+<li><strong>HTTP Status</strong>: 200 OK</li>
+</ul>
+<h4>8. GetSpieltagArray</h4>
+<ul>
+<li><strong>Purpose</strong>: Get all match days for a league</li>
+<li><strong>Method</strong>: POST or GET</li>
+<li><strong>Parameters</strong>: <code>id_saison</code>, <code>id_liga</code></li>
+<li><strong>Response</strong>: Array of match day information</li>
+<li><strong>Example Response</strong>: <code>[["98869", "1", "1. Spieltag", "1"]]</code></li>
+<li><strong>HTTP Status</strong>: 200 OK</li>
+</ul>
+<h2>JSON API Schema</h2>
+<p>The API also provides a schema endpoint that returns the API structure in JSON format.</p>
+<h3>Schema Endpoint</h3>
+<p><code>GET /api/sportwinner/schema</code></p>
+<h3>Response Format</h3>
+<p><code>json
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "SportWinner Kegel API",
+    "description": "API for accessing SportWinner kegel data",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/sportwinner": {
+      "post": {
+        "summary": "Execute SportWinner command",
+        "parameters": [
+          {
+            "name": "command",
+            "in": "query",
+            "required": true,
+            "type": "string",
+            "enum": ["GetSaisonArray", "GetKlub", "GetBezirkArray", "GetLigaArray", "GetSpiel", "GetTabelle", "GetSchnitt", "GetSpieltagArray"]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success response in SportWinner format"
+          },
+          "400": {
+            "description": "Bad request - missing command parameter"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "get": {
+        "summary": "Execute SportWinner command (GET)",
+        "parameters": [
+          {
+            "name": "command",
+            "in": "query",
+            "required": true,
+            "type": "string",
+            "enum": ["GetSaisonArray", "GetKlub", "GetBezirkArray", "GetLigaArray", "GetSpiel", "GetTabelle", "GetSchnitt", "GetSpieltagArray"]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success response in SportWinner format"
+          },
+          "400": {
+            "description": "Bad request - missing command parameter"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    }
+  }
+}</code></p>
+<h2>How to Edit and Extend the API</h2>
+<h3>1. Adding New Endpoints</h3>
+<p>To add a new SportWinner API command:</p>
+<ol>
+<li>
+<p><strong>Update the APIHandler class</strong> (<code>server/api-handler.ts</code>):
+   <code>typescript
+   async getNewEndpoint(): Promise&lt;any[]&gt; {
+     // Implementation here
+     return newData;
+   }</code></p>
+</li>
+<li>
+<p><strong>Add the new command to the API route</strong> (<code>app/api/sportwinner/route.ts</code>):
+   <code>typescript
+   case 'NewCommand':
+     const newData = await apiHandler.getNewEndpoint();
+     return Response.json(newData);</code></p>
+</li>
+<li>
+<p><strong>Add mock data</strong> to the <code>EXAMPLE_DATA</code> object if needed.</p>
+</li>
+</ol>
+<h3>2. Modifying Existing Endpoints</h3>
+<ol>
+<li>Locate the corresponding method in <code>server/api-handler.ts</code></li>
+<li>Modify the method implementation</li>
+<li>Update the data structures if needed</li>
+<li>Ensure the response format matches the SportWinner API specification</li>
+</ol>
+<h3>3. Connecting to Real SportWinner API</h3>
+<p>Currently, the API returns mock data. To connect to the real SportWinner API:</p>
+<ol>
+<li>
+<p><strong>Update the APIHandler methods</strong> to make HTTP requests to the real endpoint:
+   <code>typescript
+   async getSeasons(): Promise&lt;Season[]&gt; {
+     const response = await fetch('https://skvb.sportwinner.de/php/skvb/service.php', {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/x-www-form-urlencoded',
+       },
+       body: 'command=GetSaisonArray'
+     });
+     const data = await response.json();
+     // Process and return the data
+   }</code></p>
+</li>
+<li>
+<p><strong>Add caching mechanisms</strong> to improve performance and reduce API calls</p>
+</li>
+</ol>
+<h3>4. Adding Data Validation</h3>
+<ol>
+<li><strong>Define interfaces</strong> for new data types in <code>server/api-handler.ts</code></li>
+<li><strong>Add validation logic</strong> to ensure data integrity</li>
+<li><strong>Implement error handling</strong> for invalid requests</li>
+</ol>
+<h3>5. Environment Configuration</h3>
+<p>For connecting to the real API, add environment variables:</p>
+<p><code>env
+SPORTWINNER_API_URL=https://skvb.sportwinner.de/php/skvb/service.php
+SPORTWINNER_REFERER=https://skvb.sportwinner.de/</code></p>
+<p>Then use them in your API calls:</p>
+<p><code>typescript
+const response = await fetch(process.env.SPORTWINNER_API_URL!, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Referer': process.env.SPORTWINNER_REFERER!,
+  },
+  body: `command=${command}&amp;${params}`
+});</code></p>
+<h2>Best Practices</h2>
+<h3>1. API Design Principles</h3>
+<ul>
+<li><strong>RESTful Design</strong>: Follow RESTful principles where possible</li>
+<li><strong>Consistency</strong>: Maintain consistent response formats across all endpoints</li>
+<li><strong>Backward Compatibility</strong>: Ensure changes don't break existing client implementations</li>
+<li><strong>Error Handling</strong>: Implement proper error responses with appropriate HTTP status codes</li>
+<li><strong>Documentation</strong>: Keep API documentation up to date with each change</li>
+</ul>
+<h3>2. Data Handling</h3>
+<ul>
+<li><strong>Type Safety</strong>: Use TypeScript interfaces for all data structures</li>
+<li><strong>Validation</strong>: Validate incoming parameters before processing</li>
+<li><strong>Sanitization</strong>: Sanitize data before returning to clients</li>
+<li><strong>Privacy</strong>: Don't expose sensitive information in API responses</li>
+</ul>
+<h3>3. Performance</h3>
+<ul>
+<li><strong>Caching</strong>: Implement caching for frequently accessed data</li>
+<li><strong>Pagination</strong>: Add pagination for large datasets</li>
+<li><strong>Rate Limiting</strong>: Implement rate limiting to prevent abuse</li>
+<li><strong>Compression</strong>: Enable compression for large responses</li>
+<li><strong>Optimization</strong>: Optimize database queries and API calls</li>
+</ul>
+<h3>4. Security</h3>
+<ul>
+<li><strong>Input Validation</strong>: Validate all input parameters</li>
+<li><strong>Authentication</strong>: Add authentication if needed for protected endpoints</li>
+<li><strong>Rate Limiting</strong>: Prevent API abuse through rate limiting</li>
+<li><strong>HTTPS</strong>: Always use HTTPS in production</li>
+<li><strong>CORS</strong>: Configure CORS policies appropriately</li>
+</ul>
+<h3>5. Monitoring and Logging</h3>
+<ul>
+<li><strong>Logging</strong>: Log all API requests for debugging and monitoring</li>
+<li><strong>Metrics</strong>: Track API usage and performance metrics</li>
+<li><strong>Alerts</strong>: Set up alerts for API failures or unusual activity</li>
+<li><strong>Audit Trail</strong>: Maintain audit logs for compliance purposes</li>
+</ul>
+<h3>6. Testing</h3>
+<ul>
+<li><strong>Unit Tests</strong>: Write unit tests for all API handler methods</li>
+<li><strong>Integration Tests</strong>: Test API routes with various inputs</li>
+<li><strong>Load Testing</strong>: Perform load testing to ensure performance</li>
+<li><strong>Contract Testing</strong>: Verify API responses match expected formats</li>
+</ul>
+<h2>Testing</h2>
+<h3>Unit Testing</h3>
+<p>Each API handler method should have corresponding unit tests:</p>
+<p>```typescript
+// Example test structure
+describe('APIHandler', () =&gt; {
+  let apiHandler: APIHandler;</p>
+<p>beforeEach(() =&gt; {
+    apiHandler = new APIHandler();
+  });</p>
+<p>describe('getSeasons', () =&gt; {
+    it('should return season data', async () =&gt; {
+      const seasons = await apiHandler.getSeasons();
+      expect(seasons).toBeDefined();
+      expect(Array.isArray(seasons)).toBe(true);
+    });
+  });
+});
+```</p>
+<h3>Integration Testing</h3>
+<p>Test the API routes end-to-end:</p>
+<p>```typescript
+// Example integration test
+describe('SportWinner API Route', () =&gt; {
+  it('should handle GetSaisonArray command', async () =&gt; {
+    const response = await fetch('/api/sportwinner', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'command=GetSaisonArray'
+    });</p>
+<pre><code>expect(response.status).toBe(200);
+const data = await response.json();
+expect(Array.isArray(data)).toBe(true);
+</code></pre>
+<p>});
+});
+```</p>
+<h3>API Contract Testing</h3>
+<p>Verify that the API responses match the expected SportWinner format:</p>
+<p>```typescript
+// Example contract test
+describe('API Response Format', () =&gt; {
+  it('should match SportWinner API format for GetSaisonArray', async () =&gt; {
+    const response = await apiHandler.getSeasons();</p>
+<pre><code>// Verify format: [season_id, year, status]
+response.forEach(season =&gt; {
+  expect(season).toHaveLength(3);
+  expect(typeof season[0]).toBe('string'); // season_id
+  expect(typeof season[1]).toBe('number'); // year
+  expect(typeof season[2]).toBe('number'); // status
+});
+</code></pre>
+<p>});
+});
+```</p>
+<h2>Deployment Notes</h2>
+<ol>
+<li><strong>Environment Variables</strong>: Set up environment variables for production</li>
+<li><strong>Database Connection</strong>: Configure database connections if moving away from mock data</li>
+<li><strong>CDN Configuration</strong>: Consider CDN setup for improved performance</li>
+<li><strong>SSL Certificate</strong>: Ensure SSL certificates are properly configured</li>
+<li><strong>Monitoring Setup</strong>: Set up monitoring and alerting for the API service</li>
+</ol>
+<h2>Troubleshooting</h2>
+<h3>Common Issues</h3>
+<ol>
+<li><strong>Format Mismatch</strong>: Ensure API responses match SportWinner format exactly</li>
+<li><strong>Missing Fields</strong>: Verify all required fields are present in responses</li>
+<li><strong>Performance</strong>: Monitor response times and implement caching if needed</li>
+<li><strong>Error Handling</strong>: Ensure proper error responses are returned for invalid requests</li>
+</ol>
+<h3>Debugging Tips</h3>
+<ol>
+<li>Check server logs for error messages</li>
+<li>Verify parameter parsing in API routes</li>
+<li>Test endpoints individually using curl or Postman</li>
+<li>Compare response format with SportWinner API documentation</li>
+</ol>
+</body>
+</html>
