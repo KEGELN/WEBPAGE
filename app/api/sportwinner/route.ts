@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { APIHandler } from '@/server';
+import APIHandler from '@/server/api-handler';
 
 // Create an instance of the API handler
 const apiHandler = new APIHandler();
@@ -77,42 +77,40 @@ export async function POST(request: NextRequest) {
     // Log the API call for debugging
     console.log(`API call intercepted for command: ${command}`, Object.fromEntries(params));
 
-    // Handle specific commands with the API handler
+    // Use the API handler to process the command
+    let result: any[];
+
     switch(command) {
       case 'GetSaisonArray':
         const seasons = await apiHandler.getSeasons();
-        // Convert to the expected array format
-        const seasonArray = seasons.map(season => [
+        result = seasons.map(season => [
           season.season_id,
           season.yearof_season,
           season.status
         ]);
-        return Response.json(seasonArray);
+        break;
 
       case 'GetKlub':
         const query = params.get('name_klub') || '';
         const clubs = await apiHandler.searchClubs(query);
-        // Convert to the expected array format
-        const clubArray = clubs.map(club => [
+        result = clubs.map(club => [
           club.id,
           club.nr_club,
           club.name_klub
         ]);
-        return Response.json(clubArray);
+        break;
 
       case 'GetBezirkArray':
         const districts = await apiHandler.getDistricts();
-        // Convert to the expected array format
-        const districtArray = districts.map(district => [
+        result = districts.map(district => [
           district.bezirk_id,
           district.name_des_bezirks
         ]);
-        return Response.json(districtArray);
+        break;
 
       case 'GetLigaArray':
         const leagues = await apiHandler.getLeagues();
-        // Convert to the expected array format
-        const leagueArray = leagues.map(league => [
+        result = leagues.map(league => [
           league.liga_id,
           '', // Placeholder
           league.name_der_liga,
@@ -123,7 +121,7 @@ export async function POST(request: NextRequest) {
           league.kontakt_email1 || '',
           league.kontakt_email2 || ''
         ]);
-        return Response.json(leagueArray);
+        break;
 
       case 'GetSchnitt':
         const schnittSeasonId = params.get('id_saison') || undefined;
@@ -132,34 +130,36 @@ export async function POST(request: NextRequest) {
         const spieltagNrParam = params.get('nr_spieltag');
         const spieltagNr = spieltagNrParam ? parseInt(spieltagNrParam) : 100;
         const sortParam = params.get('sort');
-        const sort = sortParam ? parseInt(sortParam) : 0;
+        const sort = sortParam ? parseInt(sortParam) : 1; // Use 1 as default to match curl command
         const anzahlParam = params.get('anzahl');
-        const anzahl = anzahlParam ? parseInt(anzahlParam) : 20;
-        const schnittData = await apiHandler.getSchnitt(schnittSeasonId, schnittLeagueId, schnittClubId, spieltagNr, sort, anzahl);
-        return Response.json(schnittData);
+        const anzahl = anzahlParam ? parseInt(anzahlParam) : 1; // Use 1 as default to match curl command
+        result = await apiHandler.getSchnitt(schnittSeasonId, schnittLeagueId, schnittClubId, spieltagNr, sort, anzahl);
+        break;
 
       case 'GetSpiel':
-        const games = await apiHandler.getGames();
-        return Response.json(games);
+        result = await apiHandler.getGames();
+        break;
 
       case 'GetTabelle':
-        const standings = await apiHandler.getStandings();
-        return Response.json(standings);
+        result = await apiHandler.getStandings();
+        break;
 
       case 'GetSpieltagArray':
         const spieltagLeagueId = params.get('id_liga') || undefined;
         const spieltagSeasonId = params.get('id_saison') || undefined;
-        const spieltage = await apiHandler.getSpieltage(spieltagLeagueId, spieltagSeasonId);
-        return Response.json(spieltage);
+        result = await apiHandler.getSpieltage(spieltagLeagueId, spieltagSeasonId);
+        break;
 
       default:
         // For other commands, try the generic handler
-        const genericData = await apiHandler.handleCommand(command, Object.fromEntries(params));
-        return Response.json(genericData);
+        result = await apiHandler.handleCommand(command, Object.fromEntries(params));
     }
-  } catch (error) {
-    console.error('Error processing API request:', error);
-    return Response.json({ error: 'Internal server error' }, { status: 500 });
+
+    return Response.json(result);
+  } catch (error: any) {
+    console.error('Error processing API request:', error.message);
+    // Return error that can trigger a popup on the frontend
+    return Response.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -178,45 +178,43 @@ export async function GET(request: NextRequest) {
   }
 
   // Log the API call for debugging
-  console.log(`API call intercepted for command: ${command}`);
+  console.log(`API call intercepted for command: ${command}`, Object.fromEntries(searchParams));
 
   try {
-    // Handle specific commands with the API handler
+    // Use the API handler to process the command
+    let result: any[];
+
     switch(command) {
       case 'GetSaisonArray':
         const seasons = await apiHandler.getSeasons();
-        // Convert to the expected array format
-        const seasonArray = seasons.map(season => [
+        result = seasons.map(season => [
           season.season_id,
           season.yearof_season,
           season.status
         ]);
-        return Response.json(seasonArray);
+        break;
 
       case 'GetKlub':
         const query = searchParams.get('name_klub') || '';
         const clubs = await apiHandler.searchClubs(query);
-        // Convert to the expected array format
-        const clubArray = clubs.map(club => [
+        result = clubs.map(club => [
           club.id,
           club.nr_club,
           club.name_klub
         ]);
-        return Response.json(clubArray);
+        break;
 
       case 'GetBezirkArray':
         const districts = await apiHandler.getDistricts();
-        // Convert to the expected array format
-        const districtArray = districts.map(district => [
+        result = districts.map(district => [
           district.bezirk_id,
           district.name_des_bezirks
         ]);
-        return Response.json(districtArray);
+        break;
 
       case 'GetLigaArray':
         const leagues = await apiHandler.getLeagues();
-        // Convert to the expected array format
-        const leagueArray = leagues.map(league => [
+        result = leagues.map(league => [
           league.liga_id,
           '', // Placeholder
           league.name_der_liga,
@@ -227,7 +225,7 @@ export async function GET(request: NextRequest) {
           league.kontakt_email1 || '',
           league.kontakt_email2 || ''
         ]);
-        return Response.json(leagueArray);
+        break;
 
       case 'GetSchnitt':
         const schnittSeasonId = searchParams.get('id_saison') || undefined;
@@ -236,33 +234,35 @@ export async function GET(request: NextRequest) {
         const spieltagNrParam = searchParams.get('nr_spieltag');
         const spieltagNr = spieltagNrParam ? parseInt(spieltagNrParam) : 100;
         const sortParam = searchParams.get('sort');
-        const sort = sortParam ? parseInt(sortParam) : 0;
+        const sort = sortParam ? parseInt(sortParam) : 1; // Use 1 as default to match curl command
         const anzahlParam = searchParams.get('anzahl');
-        const anzahl = anzahlParam ? parseInt(anzahlParam) : 20;
-        const schnittData = await apiHandler.getSchnitt(schnittSeasonId, schnittLeagueId, schnittClubId, spieltagNr, sort, anzahl);
-        return Response.json(schnittData);
+        const anzahl = anzahlParam ? parseInt(anzahlParam) : 1; // Use 1 as default to match curl command
+        result = await apiHandler.getSchnitt(schnittSeasonId, schnittLeagueId, schnittClubId, spieltagNr, sort, anzahl);
+        break;
 
       case 'GetSpiel':
-        const games = await apiHandler.getGames();
-        return Response.json(games);
+        result = await apiHandler.getGames();
+        break;
 
       case 'GetTabelle':
-        const standings = await apiHandler.getStandings();
-        return Response.json(standings);
+        result = await apiHandler.getStandings();
+        break;
 
       case 'GetSpieltagArray':
         const spieltagLeagueId = searchParams.get('id_liga') || undefined;
         const spieltagSeasonId = searchParams.get('id_saison') || undefined;
-        const spieltage = await apiHandler.getSpieltage(spieltagLeagueId, spieltagSeasonId);
-        return Response.json(spieltage);
+        result = await apiHandler.getSpieltage(spieltagLeagueId, spieltagSeasonId);
+        break;
 
       default:
         // For other commands, try the generic handler
-        const genericData = await apiHandler.handleCommand(command, Object.fromEntries(searchParams));
-        return Response.json(genericData);
+        result = await apiHandler.handleCommand(command, Object.fromEntries(searchParams));
     }
-  } catch (error) {
-    console.error('Error processing API request:', error);
-    return Response.json({ error: 'Internal server error' }, { status: 500 });
+
+    return Response.json(result);
+  } catch (error: any) {
+    console.error('Error processing API request:', error.message);
+    // Return error that can trigger a popup on the frontend
+    return Response.json({ error: error.message }, { status: 500 });
   }
 }

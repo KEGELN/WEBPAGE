@@ -27,7 +27,6 @@ export default function Player() {
   const playerService = new PlayerService();
   const apiService = ApiService.getInstance();
 
-  // Fetch seasons, leagues, and categories when component mounts
   useEffect(() => {
     const fetchFilters = async () => {
       try {
@@ -177,8 +176,9 @@ export default function Player() {
     setSelectedLeague(e.target.value);
   };
 
-  const handlePlayerClick = (playerId: string) => {
-    router.push(`/player?id=${playerId}`);
+  const handlePlayerClick = (playerName: string) => {
+    // Redirect to search page with the player's name pre-filled
+    router.push(`/search?q=${encodeURIComponent(playerName)}`);
   };
 
   const handleSort = (key: string) => {
@@ -368,7 +368,7 @@ export default function Player() {
                   <tr
                     key={player.id || index}
                     className="border-b border-border hover:bg-accent/50 transition-colors cursor-pointer"
-                    onClick={() => handlePlayerClick(player.id)}
+                    onClick={() => handlePlayerClick(player.name)}
                   >
                     <td className="py-3 px-4">{index + 1}</td>
                     <td className="py-3 px-4 font-medium text-foreground">

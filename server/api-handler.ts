@@ -1,11 +1,10 @@
 // server/api-handler.ts
+
 interface Season {
   season_id: string;
   yearof_season: number;
   status: number;
 }
-
-
 
 interface Club {
   id: string;
@@ -28,233 +27,206 @@ interface League {
   kontakt_email2?: string;
 }
 
-// Example data for API responses
-const EXAMPLE_DATA: Record<string, any[]> = {
-  GetSaisonArray: [
-    ["11", 2025, 0],
-    ["10", 2024, 1],
-    ["9", 2023, 1]
-  ],
-  GetKlub: [
-    ["1", "001", "BSV GW Friedrichshain"],
-    ["2", "002", "SV Frieden Beyern"],
-    ["3", "003", "ESV Lok Elsterwerda"],
-    ["4", "004", "Kegelklub Berlin"],
-    ["5", "005", "Kegelverein Hamburg"]
-  ],
-  GetBezirkArray: [
-    ["1", "Berlin"],
-    ["2", "Brandenburg"],
-    ["3", "Hamburg"],
-    ["4", "Niedersachsen"]
-  ],
-  GetLigaArray: [
-    ["1", "Liga 1", "Bezirksliga Berlin", "Max Mustermann", "030-1234567", "030-7654321", "max@example.com", "max2@example.com"],
-    ["2", "Liga 2", "Landesliga Brandenburg", "Hans Meier", "030-9876543", "030-3456789", "hans@example.com", "hans2@example.com"],
-    ["3", "Liga 3", "Verbandsliga Hamburg", "Peter Schmidt", "040-1234567", "040-7654321", "peter@example.com", "peter2@example.com"]
-  ],
-  GetSpiel: [
-    ["1", "2025-01-15", "19:00", "BSV GW Friedrichshain", "SV Frieden Beyern", "BSV GW Friedrichshain", "SV Frieden Beyern", "2025-01-15", "19:00", "Completed", "Final", "Details", "More Details", "Result"]
-  ],
-  GetTabelle: [
-    ["1", "1", "BSV GW Friedrichshain", "BSV GW Friedrichshain", "Details", "10", "8", "2", "Details", "Details", "Details", "Details", "24", "Details"],
-    ["2", "2", "SV Frieden Beyern", "SV Frieden Beyern", "Details", "10", "7", "3", "Details", "Details", "Details", "Details", "21", "Details"]
-  ],
-  GetSchnitt: [
-    [1,"Böse, Stefan","BSV GW Friedrichshain","Männer","4","4","8","589","600,25","594,63","3","4","7","654"],
-    [2,"Wiesner, Rico","SV Frieden Beyern","Männer","4","3","7","629","591,67","613","4","1","5","659"],
-    [3,"Ziesche, Klaus","ESV Lok Elsterwerda","Sen B m","1","1","2","562","587","574,5","0","0","0","587"],
-    [4,"Müller, Hans","Kegelklub Berlin","Männer","3","3","6","542","578,33","560,17","2","2","4","598"],
-    [5,"Schmidt, Anna","Kegelverein Hamburg","Frauen","2","2","4","486","521,5","503,75","1","2","3","547"]
-  ]
-};
+interface Player {
+  rank: number;
+  name: string;
+  club: string;
+  category: string;
+
+  gamesTotal: number;
+  avgTotal: number;
+  mpTotal: number;
+
+  gamesHome: number;
+  avgHome: number;
+  mpHome: number;
+
+  gamesAway: number;
+  avgAway: number;
+  mpAway: number;
+
+  bestGame: number;
+}
+
+function parseGermanNumber(val: string | number): number {
+  if (typeof val === "number") return val;
+  if (!val) return 0;
+  return Number(val.replace(",", "."));
+}
 
 class APIHandler {
-  async getSeasons(): Promise<Season[]> {
-    console.log('API call intercepted for getSeasons');
+  private readonly SPORTWINNER_API_URL =
+    process.env.SPORTWINNER_API_URL ||
+    "https://skvb.sportwinner.de/php/skvb/service.php";
 
-    try {
-      // For now, return example data to avoid external API calls during development
-      // Example season data
-      return [
-        { season_id: "11", yearof_season: 2025, status: 0 },
-        { season_id: "10", yearof_season: 2024, status: 1 },
-        { season_id: "9", yearof_season: 2023, status: 1 }
-      ];
-    } catch (error) {
-      console.error('Error fetching seasons:', error);
-      // Return example data as fallback
-      return [
-        { season_id: "11", yearof_season: 2025, status: 0 },
-        { season_id: "10", yearof_season: 2024, status: 1 },
-        { season_id: "9", yearof_season: 2023, status: 1 }
-      ];
-    }
+  private readonly SPORTWINNER_REFERER =
+    process.env.SPORTWINNER_REFERER || "https://skvb.sportwinner.de/";
+
+  /* ---------------- SEASONS ---------------- */
+
+  async getSeasons(): Promise<Season[]> {
+    const res = await this.handleCommand("GetSaisonArray", {});
+    return res.map(r => ({
+      season_id: String(r[0]),
+      yearof_season: Number(r[1]),
+      status: Number(r[2])
+    }));
   }
 
   async getCurrentSeason(): Promise<Season> {
     const seasons = await this.getSeasons();
-    return seasons[0] || { season_id: "11", yearof_season: 2025, status: 0 };
+    return seasons[0];
   }
+
+  /* ---------------- CLUBS ---------------- */
 
   async searchClubs(query: string): Promise<Club[]> {
-    console.log('API call intercepted for searchClubs with query:', query);
-    
-    // Example club data - filter based on query if needed
-    const allClubs: Club[] = [
-      { id: "1", nr_club: "001", name_klub: "BSV GW Friedrichshain" },
-      { id: "2", nr_club: "002", name_klub: "SV Frieden Beyern" },
-      { id: "3", nr_club: "003", name_klub: "ESV Lok Elsterwerda" },
-      { id: "4", nr_club: "004", name_klub: "Kegelklub Berlin" },
-      { id: "5", nr_club: "005", name_klub: "Kegelverein Hamburg" },
-      { id: "6", nr_club: "006", name_klub: "Kegelgemeinschaft München" },
-      { id: "7", nr_club: "007", name_klub: "Kegelclub Köln" },
-      { id: "8", nr_club: "008", name_klub: "Kegelverein Dresden" }
-    ];
+    const params: any = { id_saison: "11" };
+    if (/^\d+$/.test(query)) params.nr_klub = query;
+    else params.name_klub = query;
 
-    // Filter clubs based on the search query (case-insensitive)
-    if (query) {
-      return allClubs.filter(club => 
-        club.name_klub.toLowerCase().includes(query.toLowerCase()) ||
-        club.nr_club.toLowerCase().includes(query.toLowerCase())
-      );
-    }
-    
-    return allClubs;
-  }
-
-  async getDistricts(): Promise<District[]> {
-    console.log('API call intercepted for getDistricts');
-    
-    // Example district data
-    return [
-      { bezirk_id: "1", name_des_bezirks: "Berlin" },
-      { bezirk_id: "2", name_des_bezirks: "Brandenburg" },
-      { bezirk_id: "3", name_des_bezirks: "Hamburg" },
-      { bezirk_id: "4", name_des_bezirks: "Niedersachsen" }
-    ];
-  }
-
-  async getLeagues(): Promise<League[]> {
-    console.log('API call intercepted for getLeagues');
-    
-    // Example league data
-    return [
-      { 
-        liga_id: "1", 
-        name_der_liga: "Bezirksliga Berlin", 
-        kontakt_name: "Max Mustermann",
-        kontakt_tel1: "030-1234567",
-        kontakt_tel2: "030-7654321",
-        kontakt_email1: "max@example.com",
-        kontakt_email2: "max2@example.com"
-      },
-      { 
-        liga_id: "2", 
-        name_der_liga: "Landesliga Brandenburg", 
-        kontakt_name: "Hans Meier",
-        kontakt_tel1: "030-9876543",
-        kontakt_tel2: "030-3456789",
-        kontakt_email1: "hans@example.com",
-        kontakt_email2: "hans2@example.com"
-      },
-      { 
-        liga_id: "3", 
-        name_der_liga: "Verbandsliga Hamburg", 
-        kontakt_name: "Peter Schmidt",
-        kontakt_tel1: "040-1234567",
-        kontakt_tel2: "040-7654321",
-        kontakt_email1: "peter@example.com",
-        kontakt_email2: "peter2@example.com"
-      }
-    ];
-  }
-
-  async getSchnitt(seasonId?: string, leagueId?: string, clubId?: string, spieltagNr: number = 100, sort: number = 0, anzahl: number = 20): Promise<any[]> {
-    console.log('API call intercepted for getSchnitt with seasonId:', seasonId, 'leagueId:', leagueId);
-
-    // Example schnitt data
-    return [
-      [1,"Böse, Stefan","BSV GW Friedrichshain","Männer","4","4","8","589","600,25","594,63","3","4","7","654"],
-      [2,"Wiesner, Rico","SV Frieden Beyern","Männer","4","3","7","629","591,67","613","4","1","5","659"],
-      [3,"Ziesche, Klaus","ESV Lok Elsterwerda","Sen B m","1","1","2","562","587","574,5","0","0","0","587"],
-      [4,"Müller, Hans","Kegelklub Berlin","Männer","3","3","6","542","578,33","560,17","2","2","4","598"],
-      [5,"Schmidt, Anna","Kegelverein Hamburg","Frauen","2","2","4","486","521,5","503,75","1","2","3","547"]
-    ];
-  }
-
-  async getGames(): Promise<any[]> {
-    console.log('API call intercepted for getGames');
-    
-    // Example game data
-    return [
-      ["1", "2025-01-15", "19:00", "BSV GW Friedrichshain", "SV Frieden Beyern", "BSV GW Friedrichshain", "SV Frieden Beyern", "2025-01-15", "19:00", "Completed", "Final", "Details", "More Details", "Result"]
-    ];
-  }
-
-  async getStandings(): Promise<any[]> {
-    console.log('API call intercepted for getStandings');
-    
-    // Example standings data
-    return [
-      ["1", "1", "BSV GW Friedrichshain", "BSV GW Friedrichshain", "Details", "10", "8", "2", "Details", "Details", "Details", "Details", "24", "Details"],
-      ["2", "2", "SV Frieden Beyern", "SV Frieden Beyern", "Details", "10", "7", "3", "Details", "Details", "Details", "Details", "21", "Details"]
-    ];
-  }
-
-  // Direct command handler for SportWinner API compatibility
-  async handleCommand(command: string, params: Record<string, any>): Promise<any[]> {
-    console.log(`API call intercepted for command: ${command}`, params);
-
-    // Return example data based on command
-    return EXAMPLE_DATA[command] || [];
-  }
-
-  async getSpieltage(leagueId: string, seasonId?: string): Promise<any[]> {
-    console.log('API call intercepted for getSpieltage with leagueId:', leagueId, 'seasonId:', seasonId);
-
-    // Example spieltage data
-    return [
-      ["98869", "1", "1. Spieltag", "1"],
-      ["98870", "2", "2. Spieltag", "1"],
-      ["98871", "3", "3. Spieltag", "1"],
-      ["98872", "4", "4. Spieltag", "1"],
-      ["98873", "5", "5. Spieltag", "1"]
-    ];
-  }
-
-  async getFullPlayerStats(seasonId?: string, leagueId?: string, spieltagNr: number = 100): Promise<Player[]> {
-    console.log('API call intercepted for getFullPlayerStats with seasonId:', seasonId, 'leagueId:', leagueId);
-
-    // Example full player stats data in the format returned by GetSchnitt
-    const schnittData = await this.getSchnitt(seasonId, leagueId, undefined, spieltagNr, 0, 100);
-
-    return schnittData.map((row: any[]) => ({
-      id: String(row[0] || ''),
-      name: String(row[1] || ''),
-      club: String(row[2] || ''),
-      category: String(row[3] || ''),
-      games: Number(row[4] || 0) + Number(row[5] || 0), // Home games + Away games
-      wins: Number(row[5] || 0) + Number(row[9] || 0), // Home wins + Away wins
-      losses: Number(row[6] || 0) + Number(row[10] || 0), // Home losses + Away losses
-      total: Number(row[7] || 0),
-      average: String(row[8] || ''),
-      schnitt: String(row[9] || '')
+    const res = await this.handleCommand("GetKlub", params);
+    return res.map(r => ({
+      id: String(r[0]),
+      nr_club: String(r[1]),
+      name_klub: String(r[2])
     }));
   }
-}
 
-interface Player {
-  id: string;
-  name: string;
-  club?: string;
-  category?: string;
-  games?: number;
-  wins?: number;
-  losses?: number;
-  total?: number;
-  average?: string;
-  schnitt?: string;
+  /* ---------------- DISTRICTS ---------------- */
+
+  async getDistricts(seasonId: string = "11"): Promise<District[]> {
+    const res = await this.handleCommand("GetBezirkArray", { id_saison: seasonId });
+    return res.map(r => ({
+      bezirk_id: String(r[0]),
+      name_des_bezirks: String(r[1])
+    }));
+  }
+
+  /* ---------------- LEAGUES ---------------- */
+
+  async getLeagues(
+    seasonId: string = "11",
+    districtId: string = "0",
+    favorit: string = "",
+    art: string = "2"
+  ): Promise<League[]> {
+    const res = await this.handleCommand("GetLigaArray", {
+      id_saison: seasonId,
+      id_bezirk: districtId,
+      favorit,
+      art
+    });
+
+    return res.map(r => ({
+      liga_id: String(r[0]),
+      name_der_liga: String(r[2]),
+      kontakt_name: r[4] || undefined,
+      kontakt_tel1: r[5] || undefined,
+      kontakt_tel2: r[6] || undefined,
+      kontakt_email1: r[7] || undefined,
+      kontakt_email2: r[8] || undefined
+    }));
+  }
+
+  /* ---------------- SCHNITT RAW ---------------- */
+
+  async getSchnitt(
+    seasonId?: string,
+    leagueId?: string,
+    clubId?: string,
+    spieltagNr: number = 100,
+    sort: number = 1,
+    anzahl: number = 1
+  ): Promise<any[][]> {
+    const res = await this.handleCommand("GetSchnitt", {
+      id_saison: seasonId || "11",
+      id_liga: leagueId || "3874",
+      id_klub: clubId || "0",
+      nr_spieltag: spieltagNr,
+      sort,
+      anzahl
+    });
+
+    return res.sort((a, b) => Number(a[0]) - Number(b[0]));
+  }
+
+  /* ---------------- FIXED PLAYER STATS ---------------- */
+
+  async getFullPlayerStats(
+    seasonId?: string,
+    leagueId?: string,
+    spieltagNr: number = 100
+  ): Promise<Player[]> {
+    const data = await this.getSchnitt(seasonId, leagueId, undefined, spieltagNr, 0, 100);
+
+    return data
+      .map(row => {
+        if (!row || row.length < 14) return null;
+
+        return {
+          rank: Number(row[0]),
+          name: String(row[1]),
+          club: String(row[2]),
+          category: String(row[3]),
+
+          gamesTotal: Number(row[4]),
+          avgTotal: parseGermanNumber(row[5]),
+          mpTotal: Number(row[6]),
+
+          gamesHome: Number(row[7]),
+          avgHome: parseGermanNumber(row[8]),
+          mpHome: Number(row[9]),
+
+          gamesAway: Number(row[10]),
+          avgAway: parseGermanNumber(row[11]),
+          mpAway: Number(row[12]),
+
+          bestGame: Number(row[13])
+        };
+      })
+      .filter(Boolean) as Player[];
+  }
+
+  /* ---------------- STANDINGS ---------------- */
+
+  async getStandings(seasonId?: string, leagueId?: string, matchdayNr: number = 100) {
+    return this.handleCommand("GetTabelle", {
+      id_saison: seasonId,
+      id_liga: leagueId,
+      nr_spieltag: matchdayNr,
+      sort: "gesamt"
+    });
+  }
+
+  /* ---------------- GAMES ---------------- */
+
+  async getGames(params: Record<string, any>) {
+    return this.handleCommand("GetSpiel", params);
+  }
+
+  /* ---------------- GENERIC COMMAND HANDLER ---------------- */
+
+  async handleCommand(command: string, params: Record<string, any>): Promise<any[][]> {
+    const body = new URLSearchParams({ command });
+
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") body.append(k, String(v));
+    });
+
+    const res = await fetch(this.SPORTWINNER_API_URL, {
+      method: "POST",
+      headers: {
+        Referer: this.SPORTWINNER_REFERER,
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+      },
+      body: body.toString()
+    });
+
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+
+    return res.json();
+  }
 }
 
 export default APIHandler;

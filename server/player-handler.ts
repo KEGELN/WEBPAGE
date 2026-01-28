@@ -24,7 +24,7 @@ export interface PlayerStats {
 }
 
 export class PlayerHandler {
-  private apiHandler: APIHandler;
+    private apiHandler: APIHandler;
 
   constructor() {
     this.apiHandler = new APIHandler();
