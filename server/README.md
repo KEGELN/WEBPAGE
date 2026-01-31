@@ -23,7 +23,7 @@ server/
 ### `api-handler.ts`
 - Core API handler implementing SportWinner API commands
 - Handles commands like GetSaisonArray, GetKlub, GetBezirkArray, GetLigaArray, GetSchnitt, etc.
-- Contains methods for fetching seasons, clubs, districts, leagues, and player statistics
+/home/lemon/Downloads/[PZG] Light Novel Audiobook Collection- Contains methods for fetching seasons, clubs, districts, leagues, and player statistics
 - Provides example data fallbacks for all API operations
 
 ### `player-handler.ts`

@@ -1,15 +1,13 @@
 // server/index.ts
 import APIHandler from './api-handler';
-import { PlayerHandler } from './player-handler';
 
 // Export the handlers
-export { APIHandler, PlayerHandler };
+export { APIHandler };
 
 // Export a default instance for convenience
 const apiHandler = new APIHandler();
-const playerHandler = new PlayerHandler();
 
-export { apiHandler, playerHandler };
+export { apiHandler };
 
 // Also export the classes themselves
-export type { APIHandler as APIHandlerType, PlayerHandler as PlayerHandlerType };
+export type { APIHandler as APIHandlerType };

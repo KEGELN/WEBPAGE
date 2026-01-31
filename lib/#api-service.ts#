@@ -245,11 +245,10 @@ class ApiService {
   async getFullPlayerStats(seasonId?: string, leagueId?: string, spieltagNr: number = 100): Promise<any[]> {
     try {
       // Get the schnitt data from the API
-      const schnittData = await this.getSchnitt(seasonId, leagueId, undefined, spieltagNr, 0, 1); // Increased from 1 to 20 to get more player results never to it again api Only works with one as parametre  
+      const schnittData = await this.getSchnitt(seasonId, leagueId, undefined, spieltagNr, 0, 1); // Increased from 1 to 20 to get more player results never to it again api Only works with one as param 
 
         return schnittData.map((row: any[]) => ({
-            rank: Number(row[0] || 0),       // Rank
-            id: String(row[1] + '_' + row[0] || Math.random().toString()), // Unique ID combining name and rank
+            id: String(row[0] || ''),        // Rank
             name: String(row[1] || ''),      // Player
             club: String(row[2] || ''),      // Club
             category: String(row[3] || ''),  // Category
@@ -260,9 +259,9 @@ class ApiService {
             gamesTotal: Number(row[6] || 0),
 
             // Averages
-            avgHome: String(row[7] || '0'),
-            avgAway:  String(row[8] || '0'),
-            avgTotal: String(row[9] || '0'),
+            avgHome: Number(row[7]),
+            avgAway:  Number(row[8]),
+            avgTotal: Number(row[9]),
 
             // Match Points
             mpHome: Number(row[10] || 0),

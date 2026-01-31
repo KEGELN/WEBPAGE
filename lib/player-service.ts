@@ -2,15 +2,22 @@
 import ApiService from './api-service';
 
 interface Player {
+  rank: number;
   id: string;
   name: string;
   club?: string;
   league?: string;
   category?: string;
-  games?: number;
-  wins?: number;
-  losses?: number;
-  total?: number;
+  gamesTotal?: number;
+  avgTotal?: string;
+  mpTotal?: number;
+  gamesHome?: number;
+  avgHome?: string;
+  mpHome?: number;
+  gamesAway?: number;
+  avgAway?: string;
+  mpAway?: number;
+  bestGame?: number;
   average?: string;
   schnitt?: string;
 }
@@ -35,16 +42,13 @@ class PlayerService {
   async getPlayerSchnitliste(seasonId?: string, leagueId?: string): Promise<Player[]> {
     try {
       // Use the API service to get full player stats with season and league filters
-      return await this.apiService.getFullPlayerStats(seasonId, leagueId);
+      const rawPlayerData = await this.apiService.getFullPlayerStats(seasonId, leagueId);
+
+      // Return the raw data directly since the component expects the detailed stats format
+      return rawPlayerData as Player[];
     } catch (error) {
       console.error('Error fetching player list:', error);
-      // Return mock data in case of error
-      return [
-        { id: '1', name: 'Böse, Stefan', club: 'BSV GW Friedrichshain', category: 'Männer', games: 4, wins: 4, losses: 8, total: 589, average: '600,25', schnitt: '594,63' },
-        { id: '2', name: 'Wiesner, Rico', club: 'SV Frieden Beyern', category: 'Männer', games: 4, wins: 3, losses: 7, total: 629, average: '591,67', schnitt: '613' },
-        { id: '3', name: 'Ziesche, Klaus', club: 'ESV Lok Elsterwerda', category: 'Sen B m', games: 1, wins: 1, losses: 2, total: 562, average: '587', schnitt: '574,5' },
-        { id: '4', name: 'Potratz, Clemens', club: 'BSV GW Friedrichshain', category: 'Männer', games: 3, wins: 2, losses: 6, total: 542, average: '578,33', schnitt: '560,17' },
-      ];
+      throw error; // Re-throw the error instead of returning mock data
     }
   }
 

@@ -93,9 +93,10 @@ export default function Player() {
     let aValue: any, bValue: any;
     switch (sortConfig.key) {
       case 'rank':
-        // For rank, sort by the original rank from the API
-        aValue = a.rank || 0;
-        bValue = b.rank || 0;
+        // For rank, we don't sort by this column specifically, as it's just the display index
+        // If sorting by rank, we can sort by average (schnitt) as the primary metric
+        aValue = parseFloat((a.average || a.schnitt || '0').replace(',', '.'));
+        bValue = parseFloat((b.average || b.schnitt || '0').replace(',', '.'));
         break;
       case 'name':
         aValue = a.name || '';
@@ -106,45 +107,45 @@ export default function Player() {
         bValue = b.club || '';
         break;
       case 'totalGames':
-        aValue = parseInt(a.gamesTotal || a.totalGames || a.games || 0);
-        bValue = parseInt(b.gamesTotal || b.totalGames || b.games || 0);
+        aValue = parseInt(a.totalGames || a.games || 0);
+        bValue = parseInt(b.totalGames || b.games || 0);
         break;
       case 'average':
         // Convert German decimal notation (comma) to a number for comparison
-        aValue = parseFloat((a.avgTotal || a.average || a.schnitt || '0').replace(',', '.'));
-        bValue = parseFloat((b.avgTotal || b.average || b.schnitt || '0').replace(',', '.'));
+        aValue = parseFloat((a.average || a.schnitt || '0').replace(',', '.'));
+        bValue = parseFloat((b.average || b.schnitt || '0').replace(',', '.'));
         break;
       case 'points':
-        aValue = parseInt(a.mpTotal || a.points || 0);
-        bValue = parseInt(b.mpTotal || b.points || 0);
+        aValue = parseInt(a.points || 0);
+        bValue = parseInt(b.points || 0);
         break;
       case 'homeGames':
-        aValue = parseInt(a.gamesHome || a.homeGames || 0);
-        bValue = parseInt(b.gamesHome || b.homeGames || 0);
+        aValue = parseInt(a.homeGames || 0);
+        bValue = parseInt(b.homeGames || 0);
         break;
       case 'homeAverage':
-        aValue = parseFloat((a.avgHome || a.homeAverage || '0').replace(',', '.'));
-        bValue = parseFloat((b.avgHome || b.homeAverage || '0').replace(',', '.'));
+        aValue = parseFloat((a.homeAverage || '0').replace(',', '.'));
+        bValue = parseFloat((b.homeAverage || '0').replace(',', '.'));
         break;
       case 'homePoints':
-        aValue = parseInt(a.mpHome || a.homePoints || 0);
-        bValue = parseInt(b.mpHome || b.homePoints || 0);
+        aValue = parseInt(a.homePoints || 0);
+        bValue = parseInt(b.homePoints || 0);
         break;
       case 'awayGames':
-        aValue = parseInt(a.gamesAway || a.awayGames || 0);
-        bValue = parseInt(b.gamesAway || b.awayGames || 0);
+        aValue = parseInt(a.awayGames || 0);
+        bValue = parseInt(b.awayGames || 0);
         break;
       case 'awayAverage':
-        aValue = parseFloat((a.avgAway || a.awayAverage || '0').replace(',', '.'));
-        bValue = parseFloat((b.avgAway || b.awayAverage || '0').replace(',', '.'));
+        aValue = parseFloat((a.awayAverage || '0').replace(',', '.'));
+        bValue = parseFloat((b.awayAverage || '0').replace(',', '.'));
         break;
       case 'awayPoints':
-        aValue = parseInt(a.mpAway || a.awayPoints || 0);
-        bValue = parseInt(b.mpAway || b.awayPoints || 0);
+        aValue = parseInt(a.awayPoints || 0);
+        bValue = parseInt(b.awayPoints || 0);
         break;
       case 'best':
-        aValue = parseInt(a.bestGame || a.best || 0);
-        bValue = parseInt(b.bestGame || b.best || 0);
+        aValue = parseInt(a.best || 0);
+        bValue = parseInt(b.best || 0);
         break;
       default:
         return 0;
@@ -370,7 +371,7 @@ export default function Player() {
                           </thead>
                           <tbody>
                               {filteredPlayers.map((player, index) => (
-                                  <tr key={player.id ?? index} className="border-b border-border hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => handlePlayerClick(player.name)}><td className="py-3 px-4">{player.rank}</td>
+                                  <tr key={player.id ?? index} className="border-b border-border hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => handlePlayerClick(player.name)}><td className="py-3 px-4">{player.id}</td>
 
                                       <td className="py-3 px-4 font-medium text-foreground">
                                           {player.name}
