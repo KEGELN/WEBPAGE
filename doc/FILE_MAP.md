@@ -84,7 +84,7 @@
 
 - `lib/temporary-berlin/`
 - Temporary integration module for `/berlin` route and parsing
-- includes PDF player-table extraction via `pdftotext` (`pdf-parser.ts`)
+- includes PDF player-table extraction via `pdf-parse` (`pdf-parser.ts`)
 
 - `lib/theme-context.tsx`
 - Theme state and localStorage persistence

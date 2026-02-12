@@ -10,6 +10,17 @@ const leagueOptions: { key: BerlinLeagueKey; label: string }[] = [
   { key: 'vereinsliga', label: 'Vereinsliga' },
 ];
 
+function extractSpieltagNumber(title: string): string | null {
+  const match = title.match(/Spieltag:\s*(\d{1,2})/i);
+  if (!match) return null;
+  return String(Number(match[1]));
+}
+
+function isUnplayedResult(value: string): boolean {
+  const normalized = value.replace(/\s+/g, '');
+  return /^[-–—]:[-–—]$/.test(normalized);
+}
+
 export default function BerlinPage() {
   const [league, setLeague] = useState<BerlinLeagueKey>('berlinliga');
   const [data, setData] = useState<BerlinLeagueData | null>(null);
@@ -59,6 +70,15 @@ export default function BerlinPage() {
     if (!data) return null;
     return data.pdfReports.find((report) => report.id === selectedReportId) || data.pdfReports[0] || null;
   }, [data, selectedReportId]);
+
+  const spieltagReportMap = useMemo(() => {
+    const map = new Map<string, { url: string; title: string }>();
+    if (!data) return map;
+    for (const ref of data.spieltagReports) {
+      map.set(ref.spieltag, { url: ref.reportUrl, title: ref.reportTitle });
+    }
+    return map;
+  }, [data]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -168,6 +188,9 @@ export default function BerlinPage() {
             </section>
 
             <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Diese Funktion ist aktuell im Aufbau. PDF-Parsing und Spielerliste konnen unvollstandig oder fehlerhaft sein.
+              </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-xl font-semibold text-foreground">Spieler-Tabelle aus PDF</h2>
                 <select
@@ -240,9 +263,35 @@ export default function BerlinPage() {
 
             <section className="space-y-4">
               <h2 className="text-xl font-semibold text-foreground">Spielplan und Ergebnisse</h2>
-              {data.matchdays.map((day) => (
+              {data.matchdays.map((day) => {
+                const spieltag = extractSpieltagNumber(day.title);
+                const report = spieltag ? spieltagReportMap.get(spieltag) : undefined;
+                const unplayedCount = day.games.filter((game) => isUnplayedResult(game.result)).length;
+                return (
                 <article key={`${day.title}-${day.anchorId || ''}`} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-                  <h3 className="text-lg font-semibold text-foreground">{day.title}</h3>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">{day.title}</h3>
+                      {unplayedCount > 0 && (
+                        <p className="text-sm text-muted-foreground">{unplayedCount} unplayed games</p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {report && (
+                        <a
+                          href={report.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center rounded-full border border-border px-3 py-1 text-sm hover:bg-muted"
+                        >
+                          Open PDF ({report.title})
+                        </a>
+                      )}
+                      {unplayedCount > 0 && !report && (
+                        <span className="text-sm text-muted-foreground">No matching PDF found</span>
+                      )}
+                    </div>
+                  </div>
                   <div className="mt-3 overflow-x-auto">
                     <table className="min-w-full">
                       <thead className="bg-muted/60">
@@ -278,7 +327,7 @@ export default function BerlinPage() {
                     </table>
                   </div>
                 </article>
-              ))}
+              )})}
               {data.matchdays.length === 0 && (
                 <p className="text-muted-foreground">Keine Spieltag-Abschnitte gefunden.</p>
               )}

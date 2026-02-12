@@ -11,8 +11,7 @@ It exists only until official API support is available.
 
 - Scrapes matchdays and standings from league pages.
 - Scrapes PDF links from `auswertungen-*` pages.
-- Downloads and parses player "Schnittliste" tables from PDFs using `pdftotext`.
-- Uses temporary files only under `/tmp/kegel-berlin-temp` and removes them after parse.
+- Downloads and parses player "Schnittliste" tables from PDFs using `pdf-parse`.
 
 ## Safe Removal
 

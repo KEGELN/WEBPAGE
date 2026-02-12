@@ -8,6 +8,7 @@ import type {
   BerlinMatchday,
   BerlinPdfLink,
   BerlinPdfReport,
+  BerlinSpieltagReportRef,
   BerlinStandingRow,
 } from './types';
 import { parseBerlinPdfReport } from './pdf-parser';
@@ -190,6 +191,33 @@ function parsePageTitle(html: string): string {
   return titleTag ? stripHtml(titleTag) : 'Berlinliga / Vereinsliga';
 }
 
+function normalizeSpieltagNumber(value: string): string {
+  const asNum = Number(value);
+  if (!Number.isFinite(asNum)) return value;
+  return String(asNum);
+}
+
+function buildSpieltagReportRefs(pdfReports: BerlinPdfReport[]): BerlinSpieltagReportRef[] {
+  const refs: BerlinSpieltagReportRef[] = [];
+  const seen = new Set<string>();
+
+  for (const report of pdfReports) {
+    if (!report.spieltagHint) continue;
+    const spieltag = normalizeSpieltagNumber(report.spieltagHint);
+    if (!spieltag) continue;
+    if (seen.has(spieltag)) continue;
+    seen.add(spieltag);
+    refs.push({
+      spieltag,
+      reportId: report.id,
+      reportTitle: report.title,
+      reportUrl: report.url,
+    });
+  }
+
+  return refs.sort((a, b) => Number(a.spieltag) - Number(b.spieltag));
+}
+
 export async function fetchBerlinLeagueData(league: BerlinLeagueKey): Promise<BerlinLeagueData> {
   const source = LEAGUE_SOURCES[league];
   const warnings: string[] = [];
@@ -224,6 +252,8 @@ export async function fetchBerlinLeagueData(league: BerlinLeagueKey): Promise<Be
     warnings.push('Failed to parse one or more PDF reports.');
   }
 
+  const spieltagReports = buildSpieltagReportRefs(pdfReports);
+
   return {
     league,
     title: parsePageTitle(pageHtml),
@@ -232,6 +262,7 @@ export async function fetchBerlinLeagueData(league: BerlinLeagueKey): Promise<Be
     matchdays,
     pdfLinks,
     pdfReports,
+    spieltagReports,
     fetchedAt: new Date().toISOString(),
     warnings,
   };

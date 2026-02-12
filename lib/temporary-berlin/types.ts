@@ -51,6 +51,13 @@ export interface BerlinPdfReport {
   warnings: string[];
 }
 
+export interface BerlinSpieltagReportRef {
+  spieltag: string;
+  reportId: string;
+  reportTitle: string;
+  reportUrl: string;
+}
+
 export interface BerlinLeagueData {
   league: BerlinLeagueKey;
   title: string;
@@ -59,6 +66,7 @@ export interface BerlinLeagueData {
   matchdays: BerlinMatchday[];
   pdfLinks: BerlinPdfLink[];
   pdfReports: BerlinPdfReport[];
+  spieltagReports: BerlinSpieltagReportRef[];
   fetchedAt: string;
   warnings: string[];
 }
