@@ -240,6 +240,19 @@ class ApiService {
     return [];
   }
 
+  async getStandingsRaw(leagueId: string, seasonId?: string, spieltagNr: number = 100, sort: number = 0): Promise<any[]> {
+    const id_saison = seasonId || (await this.getCurrentSeason())[0]?.season_id;
+
+    const response = await this.makeRequest('GetTabelle', {
+      id_saison,
+      id_liga: leagueId,
+      nr_spieltag: spieltagNr,
+      sort
+    });
+
+    return Array.isArray(response) ? response : [];
+  }
+
   async getSpielplan(seasonId: string, leagueId: string): Promise<SpielplanEntry[]> {
     const response = await this.makeRequest('GetSpielplan', {
       id_saison: seasonId,

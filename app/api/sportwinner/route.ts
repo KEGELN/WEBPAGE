@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
         break;
 
       case 'GetTabelle':
-        result = await apiHandler.getStandings();
+        result = await apiHandler.handleCommand('GetTabelle', baseParams);
         break;
 
       case 'GetSpieltagArray':
@@ -248,7 +248,7 @@ export async function GET(request: NextRequest) {
         break;
 
       case 'GetTabelle':
-        result = await apiHandler.getStandings();
+        result = await apiHandler.handleCommand('GetTabelle', baseParams);
         break;
 
       case 'GetSpieltagArray':

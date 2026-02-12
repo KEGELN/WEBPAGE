@@ -21,6 +21,9 @@ export default function ScoresPage() {
   const [leagues, setLeagues] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [standings, setStandings] = useState<any[]>([]);
+  const [standingsLoading, setStandingsLoading] = useState(false);
+  const [standingsSort, setStandingsSort] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   const playerService = new PlayerService();
   const apiService = ApiService.getInstance();
@@ -88,6 +91,14 @@ export default function ScoresPage() {
     return asNumber.toLocaleString('de-DE');
   };
 
+  const handleStandingsSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (standingsSort && standingsSort.key === key && standingsSort.direction === 'asc') {
+      direction = 'desc';
+    }
+    setStandingsSort({ key, direction });
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       if (!selectedSeason || !selectedLeague || !selectedSpieltag) return;
@@ -107,6 +118,24 @@ export default function ScoresPage() {
     };
 
     fetchData();
+  }, [selectedSeason, selectedLeague, selectedSpieltag]);
+
+  useEffect(() => {
+    const fetchStandings = async () => {
+      if (!selectedSeason || !selectedLeague || !selectedSpieltag) return;
+      setStandingsLoading(true);
+      try {
+        const spieltagNr = Number(selectedSpieltag);
+        const data = await apiService.getStandingsRaw(selectedLeague, selectedSeason, spieltagNr, 0);
+        setStandings(data);
+      } catch (err) {
+        console.error('Error fetching standings:', err);
+      } finally {
+        setStandingsLoading(false);
+      }
+    };
+
+    fetchStandings();
   }, [selectedSeason, selectedLeague, selectedSpieltag]);
 
   const sortedPlayers = [...players].sort((a, b) => {
@@ -308,9 +337,123 @@ export default function ScoresPage() {
           </div>
         )}
 
+        {!error && (
+          <>
+            <div className="mb-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-foreground">Tabelle</h2>
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Spieltag {selectedSpieltag === '100' ? 'Aktuell' : selectedSpieltag}
+                </span>
+              </div>
+
+              {standingsLoading && <LoadingSpinner label="Lade Tabelle..." className="py-6" size="sm" />}
+
+              {!standingsLoading && standings.length > 0 && (
+                (() => {
+                  const sortedStandings = [...standings].sort((a, b) => {
+                    if (!standingsSort) return 0;
+                    const getValue = (row: any[]) => {
+                      switch (standingsSort.key) {
+                        case 'position':
+                          return Number(row[1] || 0);
+                        case 'team':
+                          return String(row[2] || '');
+                        case 'spTotal':
+                          return Number(row[4] || 0);
+                        case 'tpTotal':
+                          return Number(row[7] || 0) - Number(row[8] || 0);
+                        case 'mpTotal':
+                          return Number(row[13] || 0);
+                        case 'spHome':
+                          return Number(row[5] || 0);
+                        case 'tpHome':
+                          return Number(row[9] || 0) - Number(row[10] || 0);
+                        case 'mpHome':
+                          return Number(row[14] || 0);
+                        case 'spAway':
+                          return Number(row[6] || 0);
+                        case 'tpAway':
+                          return Number(row[11] || 0) - Number(row[12] || 0);
+                        case 'mpAway':
+                          return Number(row[15] || 0);
+                        default:
+                          return 0;
+                      }
+                    };
+                    const aVal = getValue(a);
+                    const bVal = getValue(b);
+                    if (typeof aVal === 'string' && typeof bVal === 'string') {
+                      return standingsSort.direction === 'asc'
+                        ? aVal.localeCompare(bVal)
+                        : bVal.localeCompare(aVal);
+                    }
+                    if (aVal < bVal) return standingsSort.direction === 'asc' ? -1 : 1;
+                    if (aVal > bVal) return standingsSort.direction === 'asc' ? 1 : -1;
+                    return 0;
+                  });
+
+                  return (
+                    <div className="mt-3 overflow-x-auto rounded-2xl border border-border bg-gradient-to-br from-red-500/10 via-background to-rose-500/5 shadow-sm">
+                      <table className="min-w-full bg-card/80 rounded-2xl overflow-hidden border border-border">
+                        <thead className="bg-muted/70">
+                          <tr>
+                            <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('position')}>Pl.</th>
+                            <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent/50 min-w-[16rem]" onClick={() => handleStandingsSort('team')}>Mannschaft</th>
+                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('spTotal')}>Sp.</th>
+                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('tpTotal')}>TP</th>
+                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('mpTotal')}>MP</th>
+                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('spHome')}>Sp. (Heim)</th>
+                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('tpHome')}>TP (Heim)</th>
+                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('mpHome')}>MP (Heim)</th>
+                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('spAway')}>Sp. (Ausw)</th>
+                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('tpAway')}>TP (Ausw)</th>
+                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('mpAway')}>MP (Ausw)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedStandings.map((row, idx) => {
+                            const pos = row[1];
+                            const team = row[2];
+                            const spTotal = row[4];
+                            const spHome = row[5];
+                            const spAway = row[6];
+                            const tpTotal = `${row[7]}-${row[8]}`;
+                            const tpHome = `${row[9]}-${row[10]}`;
+                            const tpAway = `${row[11]}-${row[12]}`;
+                            const mpTotal = row[13];
+                            const mpHome = row[14];
+                            const mpAway = row[15];
+
+                            return (
+                              <tr key={`${row[0]}-${idx}`} className="border-b border-border">
+                                <td className="py-3 px-4">{displayValue(pos)}</td>
+                                <td className="py-3 px-4 font-medium text-foreground min-w-[16rem] whitespace-nowrap">{displayValue(team)}</td>
+                                <td className="py-3 px-4 text-center">{displayValue(spTotal)}</td>
+                            <td className="py-3 px-4 text-center whitespace-nowrap">{displayValue(tpTotal)}</td>
+                                <td className="py-3 px-4 text-center">{displayValue(mpTotal)}</td>
+                                <td className="py-3 px-4 text-center">{displayValue(spHome)}</td>
+                            <td className="py-3 px-4 text-center whitespace-nowrap">{displayValue(tpHome)}</td>
+                                <td className="py-3 px-4 text-center">{displayValue(mpHome)}</td>
+                                <td className="py-3 px-4 text-center">{displayValue(spAway)}</td>
+                            <td className="py-3 px-4 text-center whitespace-nowrap">{displayValue(tpAway)}</td>
+                                <td className="py-3 px-4 text-center">{displayValue(mpAway)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          </>
+        )}
+
         {!loading && !error && filteredPlayers.length > 0 && (
-          <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
-            <table className="min-w-full bg-card rounded-2xl overflow-hidden border border-border">
+          <div className="overflow-x-auto rounded-2xl border border-border bg-gradient-to-br from-red-500/10 via-background to-rose-500/5 shadow-sm">
+            <table className="min-w-full bg-card/80 rounded-2xl overflow-hidden border border-border">
               <thead className="bg-muted/70 sticky top-0">
                 <tr>
                   <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors" onClick={() => handleSort('rank')}>

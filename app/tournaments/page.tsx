@@ -143,8 +143,8 @@ export default function TournamentsPage() {
         : '0';
 
     return (
-      <div className="mt-3 overflow-x-auto rounded-xl border border-border bg-card">
-        <table className="min-w-full table-fixed text-sm">
+      <div className="mt-3 overflow-x-auto rounded-xl border border-border bg-gradient-to-br from-red-500/10 via-background to-rose-500/5">
+        <table className="min-w-full table-fixed text-sm bg-card/80">
           <thead className="bg-muted/70">
             <tr>
               <th className="py-2 px-3 text-right w-[16rem]">Spieler</th>
@@ -297,8 +297,8 @@ export default function TournamentsPage() {
               return (
                 <section key={spieltag} className="space-y-3">
                   <h2 className="text-xl font-semibold text-foreground">{spieltag}</h2>
-                  <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
-                    <table className="min-w-full bg-card rounded-2xl overflow-hidden border border-border">
+                  <div className="overflow-x-auto rounded-2xl border border-border bg-gradient-to-br from-red-500/10 via-background to-rose-500/5 shadow-sm">
+                    <table className="min-w-full bg-card/80 rounded-2xl overflow-hidden border border-border">
                       <thead className="bg-muted/70">
                         <tr>
                           <th className="py-3 px-4 text-left text-foreground">Datum/Zeit</th>
