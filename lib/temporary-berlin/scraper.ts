@@ -7,8 +7,10 @@ import type {
   BerlinMatch,
   BerlinMatchday,
   BerlinPdfLink,
+  BerlinPdfReport,
   BerlinStandingRow,
 } from './types';
+import { parseBerlinPdfReport } from './pdf-parser';
 
 const LEAGUE_SOURCES: Record<BerlinLeagueKey, { page: string; pdfPage: string }> = {
   berlinliga: {
@@ -170,6 +172,16 @@ function parsePdfLinks(html: string, baseUrl: string): BerlinPdfLink[] {
   return links;
 }
 
+function sortPdfLinksNewestFirst(links: BerlinPdfLink[]): BerlinPdfLink[] {
+  const score = (url: string): number => {
+    const name = url.split('/').pop() || '';
+    const match = name.match(/-(\d{1,2})(?:_|\.|$)/);
+    return match ? Number(match[1]) : -1;
+  };
+
+  return [...links].sort((a, b) => score(b.url) - score(a.url));
+}
+
 function parsePageTitle(html: string): string {
   const h1 = html.match(/<h1[^>]*id="post-title"[^>]*>([\s\S]*?)<\/h1>/i)?.[1];
   if (h1) return stripHtml(h1);
@@ -194,7 +206,23 @@ export async function fetchBerlinLeagueData(league: BerlinLeagueKey): Promise<Be
 
   const standings = parseStandings(pageHtml);
   const matchdays = parseMatchdays(pageHtml);
-  const pdfLinks = parsePdfLinks(`${pageHtml}\n${pdfPageHtml}`, source.page);
+  const pdfLinks = sortPdfLinksNewestFirst(parsePdfLinks(`${pageHtml}\n${pdfPageHtml}`, source.page));
+
+  const MAX_PARSED_REPORTS = 12;
+  const reportTargets = pdfLinks.slice(0, MAX_PARSED_REPORTS);
+  if (pdfLinks.length > MAX_PARSED_REPORTS) {
+    warnings.push(`PDF parsing limited to ${MAX_PARSED_REPORTS} latest reports.`);
+  }
+
+  let pdfReports: BerlinPdfReport[] = [];
+  try {
+    pdfReports = await Promise.all(
+      reportTargets.map((pdf) => parseBerlinPdfReport(pdf.url, pdf.title, league))
+    );
+  } catch (error) {
+    console.error(error);
+    warnings.push('Failed to parse one or more PDF reports.');
+  }
 
   return {
     league,
@@ -203,8 +231,8 @@ export async function fetchBerlinLeagueData(league: BerlinLeagueKey): Promise<Be
     standings,
     matchdays,
     pdfLinks,
+    pdfReports,
     fetchedAt: new Date().toISOString(),
     warnings,
   };
 }
-

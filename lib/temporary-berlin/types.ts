@@ -32,6 +32,25 @@ export interface BerlinPdfLink {
   url: string;
 }
 
+export interface BerlinPlayerRow {
+  place: number;
+  name: string;
+  team: string;
+  games: string;
+  avgKegel: string;
+  mp: string;
+  plusAuswechslung: string;
+}
+
+export interface BerlinPdfReport {
+  id: string;
+  title: string;
+  url: string;
+  spieltagHint?: string;
+  players: BerlinPlayerRow[];
+  warnings: string[];
+}
+
 export interface BerlinLeagueData {
   league: BerlinLeagueKey;
   title: string;
@@ -39,7 +58,7 @@ export interface BerlinLeagueData {
   standings: BerlinStandingRow[];
   matchdays: BerlinMatchday[];
   pdfLinks: BerlinPdfLink[];
+  pdfReports: BerlinPdfReport[];
   fetchedAt: string;
   warnings: string[];
 }
-

@@ -15,6 +15,7 @@ export default function BerlinPage() {
   const [data, setData] = useState<BerlinLeagueData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<string>('');
 
   useEffect(() => {
     let active = true;
@@ -30,6 +31,7 @@ export default function BerlinPage() {
         const json = (await response.json()) as BerlinLeagueData;
         if (!active) return;
         setData(json);
+        setSelectedReportId(json.pdfReports[0]?.id || '');
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Fehler beim Laden der Berlin-Daten.';
         if (!active) return;
@@ -52,6 +54,11 @@ export default function BerlinPage() {
     if (Number.isNaN(date.getTime())) return data.fetchedAt;
     return date.toLocaleString('de-DE');
   }, [data?.fetchedAt]);
+
+  const selectedReport = useMemo(() => {
+    if (!data) return null;
+    return data.pdfReports.find((report) => report.id === selectedReportId) || data.pdfReports[0] || null;
+  }, [data, selectedReportId]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -158,6 +165,77 @@ export default function BerlinPage() {
                   <p className="text-sm text-muted-foreground">Keine PDF-Links erkannt.</p>
                 )}
               </div>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-xl font-semibold text-foreground">Spieler-Tabelle aus PDF</h2>
+                <select
+                  value={selectedReport?.id || ''}
+                  onChange={(e) => setSelectedReportId(e.target.value)}
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                >
+                  {data.pdfReports.map((report) => (
+                    <option key={report.id} value={report.id}>
+                      {report.title}{report.spieltagHint ? ` (Spieltag ${report.spieltagHint})` : ''}
+                    </option>
+                  ))}
+                  {data.pdfReports.length === 0 && <option value="">Keine Reports verfugbar</option>}
+                </select>
+              </div>
+
+              {selectedReport && (
+                <div className="mt-4 space-y-3">
+                  <div className="text-sm text-muted-foreground">
+                    Quelle:{' '}
+                    <a className="underline hover:text-foreground" href={selectedReport.url} target="_blank" rel="noreferrer">
+                      {selectedReport.title}
+                    </a>
+                  </div>
+
+                  {selectedReport.warnings.length > 0 && (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                      {selectedReport.warnings.join(' ')}
+                    </div>
+                  )}
+
+                  <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="min-w-full">
+                      <thead className="bg-muted/60">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Pl.</th>
+                          <th className="px-3 py-2 text-left">Name</th>
+                          <th className="px-3 py-2 text-left">Team</th>
+                          <th className="px-3 py-2 text-left">Spiele</th>
+                          <th className="px-3 py-2 text-left">Ø Kegel</th>
+                          <th className="px-3 py-2 text-left">MP</th>
+                          <th className="px-3 py-2 text-left">+ A/E</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedReport.players.map((row) => (
+                          <tr key={`${selectedReport.id}-${row.place}-${row.name}`} className="border-t border-border">
+                            <td className="px-3 py-2">{row.place}</td>
+                            <td className="px-3 py-2">{row.name}</td>
+                            <td className="px-3 py-2">{row.team}</td>
+                            <td className="px-3 py-2">{row.games}</td>
+                            <td className="px-3 py-2">{row.avgKegel}</td>
+                            <td className="px-3 py-2">{row.mp}</td>
+                            <td className="px-3 py-2">{row.plusAuswechslung}</td>
+                          </tr>
+                        ))}
+                        {selectedReport.players.length === 0 && (
+                          <tr>
+                            <td colSpan={7} className="px-3 py-3 text-center text-muted-foreground">
+                              Keine Spielerzeilen aus diesem PDF geparst.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="space-y-4">

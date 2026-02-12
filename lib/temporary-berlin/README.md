@@ -7,6 +7,13 @@ This folder is a temporary scraper-based bridge for:
 
 It exists only until official API support is available.
 
+## Current Scope
+
+- Scrapes matchdays and standings from league pages.
+- Scrapes PDF links from `auswertungen-*` pages.
+- Downloads and parses player "Schnittliste" tables from PDFs using `pdftotext`.
+- Uses temporary files only under `/tmp/kegel-berlin-temp` and removes them after parse.
+
 ## Safe Removal
 
 When official API support is ready, you can delete:
@@ -15,4 +22,3 @@ When official API support is ready, you can delete:
 - `app/api/berlin/route.ts`
 - `app/berlin/page.tsx`
 - optional nav link to `/berlin` in `components/menubar.tsx`
-
