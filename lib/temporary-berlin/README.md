@@ -11,7 +11,23 @@ It exists only until official API support is available.
 
 - Scrapes matchdays and standings from league pages.
 - Scrapes PDF links from `auswertungen-*` pages.
-- Downloads and parses player "Schnittliste" tables from PDFs using `pdf-parse`.
+- Reads player tables from prebuilt CSV files in `data/{league}/`.
+- CSV files are generated offline by `scripts/build_berlin_csv.py` using Poppler (`pdftotext`).
+
+## CSV Build
+
+Run from project root:
+
+```bash
+python3 scripts/build_berlin_csv.py --league all
+```
+
+This writes:
+
+- `data/berlinliga/*.csv`
+- `data/vereinsliga/*.csv`
+- `data/berlinliga/index.json`
+- `data/vereinsliga/index.json`
 
 ## Safe Removal
 

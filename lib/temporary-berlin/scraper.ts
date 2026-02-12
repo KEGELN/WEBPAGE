@@ -1,6 +1,8 @@
 // Temporary integration for Kleeblatt Berlin pages.
 // Remove this module and the /api/berlin route once official API support exists.
 
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import type {
   BerlinLeagueData,
   BerlinLeagueKey,
@@ -11,7 +13,6 @@ import type {
   BerlinSpieltagReportRef,
   BerlinStandingRow,
 } from './types';
-import { parseBerlinPdfReport } from './pdf-parser';
 
 const LEAGUE_SOURCES: Record<BerlinLeagueKey, { page: string; pdfPage: string }> = {
   berlinliga: {
@@ -218,6 +219,84 @@ function buildSpieltagReportRefs(pdfReports: BerlinPdfReport[]): BerlinSpieltagR
   return refs.sort((a, b) => Number(a.spieltag) - Number(b.spieltag));
 }
 
+type BerlinReportIndexEntry = {
+  id: string;
+  title: string;
+  pdf_url: string;
+  csv_file: string | null;
+  spieltag: string | null;
+  row_count?: number;
+  error?: string;
+};
+
+type BerlinReportIndex = {
+  league: string;
+  reports: BerlinReportIndexEntry[];
+};
+
+function parseCsvRows(content: string) {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length <= 1) return [];
+
+  const out: BerlinPdfReport['players'] = [];
+  for (const line of lines.slice(1)) {
+    const parts = line.split(';');
+    if (parts.length < 7) continue;
+    const place = Number(parts[0]);
+    if (!Number.isFinite(place)) continue;
+    out.push({
+      place,
+      name: parts[1],
+      team: parts[2],
+      games: parts[3],
+      avgKegel: parts[4],
+      mp: parts[5],
+      plusAuswechslung: parts[6],
+    });
+  }
+  return out;
+}
+
+async function loadIndexedReports(league: BerlinLeagueKey): Promise<BerlinPdfReport[]> {
+  const baseDir = path.join(process.cwd(), 'data', league);
+  const indexPath = path.join(baseDir, 'index.json');
+  const indexRaw = await readFile(indexPath, 'utf8');
+  const index = JSON.parse(indexRaw) as BerlinReportIndex;
+  const reports: BerlinPdfReport[] = [];
+
+  for (const entry of index.reports || []) {
+    const warnings: string[] = [];
+    if (entry.error) warnings.push(entry.error);
+
+    let players: BerlinPdfReport['players'] = [];
+    if (entry.csv_file) {
+      try {
+        const csvRaw = await readFile(path.join(baseDir, entry.csv_file), 'utf8');
+        players = parseCsvRows(csvRaw);
+        if (players.length === 0) warnings.push('No Schnittliste player rows in CSV.');
+      } catch (error) {
+        warnings.push(error instanceof Error ? error.message : 'Failed to read CSV report');
+      }
+    } else {
+      warnings.push('No CSV generated for this report.');
+    }
+
+    reports.push({
+      id: entry.id,
+      title: entry.title,
+      url: entry.pdf_url,
+      spieltagHint: entry.spieltag || undefined,
+      players,
+      warnings,
+    });
+  }
+
+  return reports;
+}
+
 export async function fetchBerlinLeagueData(league: BerlinLeagueKey): Promise<BerlinLeagueData> {
   const source = LEAGUE_SOURCES[league];
   const warnings: string[] = [];
@@ -236,20 +315,12 @@ export async function fetchBerlinLeagueData(league: BerlinLeagueKey): Promise<Be
   const matchdays = parseMatchdays(pageHtml);
   const pdfLinks = sortPdfLinksNewestFirst(parsePdfLinks(`${pageHtml}\n${pdfPageHtml}`, source.page));
 
-  const MAX_PARSED_REPORTS = 12;
-  const reportTargets = pdfLinks.slice(0, MAX_PARSED_REPORTS);
-  if (pdfLinks.length > MAX_PARSED_REPORTS) {
-    warnings.push(`PDF parsing limited to ${MAX_PARSED_REPORTS} latest reports.`);
-  }
-
   let pdfReports: BerlinPdfReport[] = [];
   try {
-    pdfReports = await Promise.all(
-      reportTargets.map((pdf) => parseBerlinPdfReport(pdf.url, pdf.title, league))
-    );
+    pdfReports = await loadIndexedReports(league);
   } catch (error) {
+    warnings.push('No local CSV index found. Run scripts/build_berlin_csv.py first.');
     console.error(error);
-    warnings.push('Failed to parse one or more PDF reports.');
   }
 
   const spieltagReports = buildSpieltagReportRefs(pdfReports);

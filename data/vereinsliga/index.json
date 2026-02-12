@@ -1,0 +1,61 @@
+{
+  "league": "vereinsliga",
+  "reports": [
+    {
+      "id": "VL2526-01-kor.pdf",
+      "title": "VL2526-01-kor.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/09/VL2526-01-kor.pdf",
+      "csv_file": "VL2526-01-kor.csv",
+      "spieltag": "1",
+      "row_count": 0
+    },
+    {
+      "id": "VL2526-02.pdf",
+      "title": "VL2526-02.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/10/VL2526-02.pdf",
+      "csv_file": "VL2526-02.csv",
+      "spieltag": "2",
+      "row_count": 33
+    },
+    {
+      "id": "VL2526-03.pdf",
+      "title": "VL2526-03.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/11/VL2526-03.pdf",
+      "csv_file": "VL2526-03.csv",
+      "spieltag": "3",
+      "row_count": 41
+    },
+    {
+      "id": "VL2526-04.pdf",
+      "title": "VL2526-04.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/11/VL2526-04.pdf",
+      "csv_file": "VL2526-04.csv",
+      "spieltag": "4",
+      "row_count": 45
+    },
+    {
+      "id": "VL2526-05.pdf",
+      "title": "VL2526-05.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/12/VL2526-05.pdf",
+      "csv_file": "VL2526-05.csv",
+      "spieltag": "5",
+      "row_count": 0
+    },
+    {
+      "id": "VL2526-06.pdf",
+      "title": "VL2526-06.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2026/01/VL2526-06.pdf",
+      "csv_file": "VL2526-06.csv",
+      "spieltag": "6",
+      "row_count": 48
+    },
+    {
+      "id": "VL2526-07.pdf",
+      "title": "VL2526-07.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2026/02/VL2526-07.pdf",
+      "csv_file": "VL2526-07.csv",
+      "spieltag": "7",
+      "row_count": 50
+    }
+  ]
+}

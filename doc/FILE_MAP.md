@@ -84,7 +84,10 @@
 
 - `lib/temporary-berlin/`
 - Temporary integration module for `/berlin` route and parsing
-- includes PDF player-table extraction via `pdf-parse` (`pdf-parser.ts`)
+- consumes prebuilt CSV report data from `data/{league}/index.json`
+
+- `scripts/build_berlin_csv.py`
+- offline CSV builder: downloads reports, uses Poppler `pdftotext`, writes `data/berlinliga/*.csv` and `data/vereinsliga/*.csv`
 
 - `lib/theme-context.tsx`
 - Theme state and localStorage persistence

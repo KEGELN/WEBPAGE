@@ -1,0 +1,77 @@
+{
+  "league": "berlinliga",
+  "reports": [
+    {
+      "id": "BlnL_2526-01-1.pdf",
+      "title": "BlnL_2526-01-1.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/09/BlnL_2526-01-1.pdf",
+      "csv_file": "BlnL_2526-01-1.csv",
+      "spieltag": "1",
+      "row_count": 0
+    },
+    {
+      "id": "BlnL_2526-02.pdf",
+      "title": "BlnL_2526-02.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/09/BlnL_2526-02.pdf",
+      "csv_file": "BlnL_2526-02.csv",
+      "spieltag": "2",
+      "row_count": 0
+    },
+    {
+      "id": "BlnL_2526-03_korr.pdf",
+      "title": "BlnL_2526-03_korr.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/10/BlnL_2526-03_korr.pdf",
+      "csv_file": "BlnL_2526-03_korr.csv",
+      "spieltag": "3",
+      "row_count": 32
+    },
+    {
+      "id": "BlnL_2526-04.pdf",
+      "title": "BlnL_2526-04.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/11/BlnL_2526-04.pdf",
+      "csv_file": "BlnL_2526-04.csv",
+      "spieltag": "4",
+      "row_count": 37
+    },
+    {
+      "id": "BlnL_2526-Nach-02.pdf",
+      "title": "BlnL_2526-Nach-02.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/11/BlnL_2526-Nach-02.pdf",
+      "csv_file": "BlnL_2526-Nach-02.csv",
+      "spieltag": "2",
+      "row_count": 38
+    },
+    {
+      "id": "BlnL_2526-05.pdf",
+      "title": "BlnL_2526-05.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/11/BlnL_2526-05.pdf",
+      "csv_file": "BlnL_2526-05.csv",
+      "spieltag": "5",
+      "row_count": 39
+    },
+    {
+      "id": "BlnL_2526-06.pdf",
+      "title": "BlnL_2526-06.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2025/12/BlnL_2526-06.pdf",
+      "csv_file": "BlnL_2526-06.csv",
+      "spieltag": "6",
+      "row_count": 39
+    },
+    {
+      "id": "BlnL_2526-07.pdf",
+      "title": "BlnL_2526-07.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2026/01/BlnL_2526-07.pdf",
+      "csv_file": "BlnL_2526-07.csv",
+      "spieltag": "7",
+      "row_count": 40
+    },
+    {
+      "id": "BlnL_2526-08_korr.pdf",
+      "title": "BlnL_2526-08_korr.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2026/02/BlnL_2526-08_korr.pdf",
+      "csv_file": "BlnL_2526-08_korr.csv",
+      "spieltag": "8",
+      "row_count": 46
+    }
+  ]
+}

@@ -87,7 +87,7 @@ export default function BerlinPage() {
         <section className="rounded-2xl border border-border bg-gradient-to-br from-red-500/15 via-background to-rose-500/10 p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Temporare Integration</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Temporäre Integration</div>
               <h1 className="text-3xl font-bold text-foreground">Berlin Spielbetrieb</h1>
               <p className="text-sm text-muted-foreground">
                 Datenquelle: kleeblatt-berlin.de (Scraping-Bridge, bis offizielle API verfugbar ist)
@@ -273,7 +273,7 @@ export default function BerlinPage() {
                     <div>
                       <h3 className="text-lg font-semibold text-foreground">{day.title}</h3>
                       {unplayedCount > 0 && (
-                        <p className="text-sm text-muted-foreground">{unplayedCount} unplayed games</p>
+                        <p className="text-sm text-muted-foreground">{unplayedCount} offene Spiele</p>
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -284,11 +284,11 @@ export default function BerlinPage() {
                           rel="noreferrer"
                           className="inline-flex items-center rounded-full border border-border px-3 py-1 text-sm hover:bg-muted"
                         >
-                          Open PDF ({report.title})
+                          PDF öffnen ({report.title})
                         </a>
                       )}
                       {unplayedCount > 0 && !report && (
-                        <span className="text-sm text-muted-foreground">No matching PDF found</span>
+                        <span className="text-sm text-muted-foreground">Keine passende PDF gefunden</span>
                       )}
                     </div>
                   </div>

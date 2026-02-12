@@ -1,4 +1,5 @@
-// Temporary PDF parser for Berlinliga/Vereinsliga reports using pdf-parse (Vercel-safe).
+// Temporary PDF parser for Berlinliga/Vereinsliga reports.
+// Pure Node implementation using pdf-parse (Vercel-compatible).
 // Remove when official API support is available.
 
 import pdfParse from 'pdf-parse';
@@ -14,10 +15,6 @@ function normalizePdfText(text: string): string {
     .trim();
 }
 
-function normalizeNumberToken(value: string): string {
-  return value.replace(/\./g, ',');
-}
-
 function isInvalidLeftSegment(value: string): boolean {
   return /(?:^|\s)(?:Bahn|Kegel|SP|MP|Endstand|Schnittliste)(?:\s|$)/i.test(value);
 }
@@ -25,21 +22,15 @@ function isInvalidLeftSegment(value: string): boolean {
 function splitNameAndTeam(left: string): { name: string; team: string } {
   const trimmed = left.trim();
 
-  // Strong known shapes from SKB reports.
-  const explicit = trimmed.match(
-    /^(.*)\s+((?:KSC|Ferns|Semp(?:\/AdW|AdW)?)(?:\s+[IVX]+)?(?:\s+\([^)]+\))?)$/i
+  // Handles compact forms like "...(EO)KSC" and "...SempAdW IV (g)".
+  const teamMatch = trimmed.match(
+    /^(.*?)(KSC(?:\s+[IVX]+)?(?:\s+\([^)]+\))?|Ferns\s+\([^)]+\)|Semp(?:\/AdW|AdW)?(?:\s+[IVX]+)?(?:\s+\([^)]+\))?|SempAdW)$/i
   );
-  if (explicit) {
-    return { name: explicit[1].trim(), team: explicit[2].trim() };
+  if (teamMatch) {
+    return { name: teamMatch[1].trim(), team: teamMatch[2].trim() };
   }
 
-  // Generic team suffix that ends in bracketed class, e.g. "(M)" or "(g)".
-  const bracketTeam = trimmed.match(/^(.+?)\s+([A-Za-zÄÖÜäöüß./-]+(?:\s+[IVX]+)?\s+\([^)]+\))$/);
-  if (bracketTeam) {
-    return { name: bracketTeam[1].trim(), team: bracketTeam[2].trim() };
-  }
-
-  // Fallback split when parser flattens spacing too aggressively.
+  // Fallback split for unknown team labels.
   const tokens = trimmed.split(/\s+/);
   const splitIndex = Math.max(1, Math.floor(tokens.length * 0.65));
   return {
@@ -48,61 +39,123 @@ function splitNameAndTeam(left: string): { name: string; team: string } {
   };
 }
 
+function pickGamesAndAvg(rest: string): { left: string; games: string; avgKegel: string } | null {
+  type Candidate = { left: string; games: string; avgKegel: string; score: number };
+  const candidates: Candidate[] = [];
+
+  // Try all plausible "games + avg" splits at the tail.
+  for (let avgIntDigits = 1; avgIntDigits <= 4; avgIntDigits++) {
+    for (let gamesDigits = 1; gamesDigits <= 2; gamesDigits++) {
+      const re = new RegExp(`^(.*?)(\\d{${gamesDigits}})(\\d{${avgIntDigits}},\\d)$`);
+      const m = rest.match(re);
+      if (!m) continue;
+
+      const left = m[1].trim();
+      const games = m[2];
+      const avgKegel = m[3];
+      if (!left) continue;
+
+      const gamesNum = Number(games);
+      const avgNum = Number(avgKegel.replace(',', '.'));
+      if (!Number.isFinite(gamesNum) || !Number.isFinite(avgNum)) continue;
+      if (gamesNum > 30) continue;
+      if (avgNum > 999.9) continue;
+
+      let score = 0;
+      if (avgNum >= 100) score += 100; // realistic kegel average
+      if (avgNum === 0 && gamesNum === 0) score += 90;
+      if (gamesNum <= 12) score += 30;
+      if (/\b(KSC|Ferns|Semp)\b/i.test(left)) score += 20;
+      if (/\)$/.test(left)) score += 5;
+
+      candidates.push({ left, games, avgKegel, score });
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0];
+}
+
+function parseChunk(chunk: string): {
+  left: string;
+  games: string;
+  avgKegel: string;
+  mp: string;
+  plusAuswechslung: string;
+} | null {
+  let rest = chunk.trim();
+  if (!rest) return null;
+
+  // Tail format in flattened text commonly looks like:
+  // "...<games><avg><mp><plus>" e.g. KSC1562,03,00
+  const plus = rest.match(/(\d)$/)?.[1];
+  if (!plus) return null;
+  rest = rest.slice(0, -1);
+
+  const mp = rest.match(/((?:[1-9]\d|\d),\d)$/)?.[1];
+  if (!mp) return null;
+  rest = rest.slice(0, -mp.length);
+
+  const gamesAvg = pickGamesAndAvg(rest);
+  if (!gamesAvg) return null;
+
+  return {
+    left: gamesAvg.left,
+    games: gamesAvg.games,
+    avgKegel: gamesAvg.avgKegel,
+    mp,
+    plusAuswechslung: plus,
+  };
+}
+
 function parsePlayerRows(text: string): BerlinPlayerRow[] {
-  const rows: BerlinPlayerRow[] = [];
-  const seen = new Set<string>();
   const normalized = normalizePdfText(text);
   const lines = normalized.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const rows: BerlinPlayerRow[] = [];
+  const seen = new Set<string>();
 
-  // Rank rows in these PDFs are encoded with spaces: "1 . Name ...".
-  // This avoids matching lane columns like "1. Bahn".
-  const lineRowRegex =
-    /(\d{1,2})\s+\.\s*(.*?)\s+(\d+)\s+(\d{1,4}[,.]\d)\s+(\d{1,2}[,.]\d)\s+(\d+)(?=\s+\d{1,2}\s+\.|$)/g;
+  // Rank rows in this source are encoded as "1 .", "2 .", etc.
+  // This avoids false positives like "1. Bahn".
+  const rankChunkRegex = /(\d{1,2})\s+\.\s*(.*?)(?=\s+\d{1,2}\s+\.|$)/g;
 
   for (const line of lines) {
     let match: RegExpExecArray | null;
-    while ((match = lineRowRegex.exec(line)) !== null) {
+    while ((match = rankChunkRegex.exec(line)) !== null) {
       const place = Number(match[1]);
-      const left = match[2].trim();
-      const games = match[3];
-      const avgKegel = normalizeNumberToken(match[4]);
-      const mp = normalizeNumberToken(match[5]);
-      const plusAuswechslung = match[6];
-      if (!left || isInvalidLeftSegment(left)) continue;
+      const parsed = parseChunk(match[2]);
+      if (!parsed) continue;
+      if (isInvalidLeftSegment(parsed.left)) continue;
 
-      const split = splitNameAndTeam(left);
-      const name = split.name;
-      const team = split.team;
-      if (!name || !team) continue;
+      const split = splitNameAndTeam(parsed.left);
+      if (!split.name || !split.team) continue;
 
-      const key = `${place}::${name}`;
+      const key = `${place}::${split.name}`;
       if (seen.has(key)) continue;
       seen.add(key);
 
       rows.push({
         place,
-        name: name.trim(),
-        team: team.trim(),
-        games,
-        avgKegel,
-        mp,
-        plusAuswechslung,
+        name: split.name,
+        team: split.team,
+        games: parsed.games,
+        avgKegel: parsed.avgKegel,
+        mp: parsed.mp,
+        plusAuswechslung: parsed.plusAuswechslung,
       });
     }
   }
 
   rows.sort((a, b) => a.place - b.place || a.name.localeCompare(b.name, 'de'));
-
   return rows;
 }
 
 function getSpieltagHint(fileName: string, text: string): string | undefined {
   const fileMatch = fileName.match(/(?:-|_)(\d{1,2})(?:_|\.|$)/);
-  if (fileMatch) return fileMatch[1];
+  if (fileMatch) return String(Number(fileMatch[1]));
 
-  const normalized = normalizePdfText(text);
-  const textMatch = normalized.match(/(\d{1,2})\.\s*Spieltag/i);
-  if (textMatch) return textMatch[1];
+  const textMatch = normalizePdfText(text).match(/(\d{1,2})\.\s*Spieltag/i);
+  if (textMatch) return String(Number(textMatch[1]));
 
   return undefined;
 }
