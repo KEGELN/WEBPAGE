@@ -49,6 +49,9 @@ export default function Menubar() {
             <Link href="/tournaments" className="hover:text-primary transition-colors duration-200 font-medium">
               Spielplan
             </Link>
+            <Link href="/berlin" className="hover:text-primary transition-colors duration-200 font-medium">
+              Berlin
+            </Link>
                   </div>
 
                   {/* Search Bar and Theme Toggle (Desktop) */}
@@ -137,6 +140,13 @@ export default function Menubar() {
                 className="block px-4 py-2 hover:bg-muted rounded-md transition-colors font-medium"
               >
                 Spielplan
+              </Link>
+              <Link
+                href="/berlin"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block px-4 py-2 hover:bg-muted rounded-md transition-colors font-medium"
+              >
+                Berlin
               </Link>
                       </div>
                   </div>
