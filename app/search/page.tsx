@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Menubar from '@/components/menubar.tsx';
 import ApiService from '@/lib/api-service';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function SearchPage() {
   const searchParams = useSearchParams();
@@ -151,9 +152,7 @@ export default function SearchPage() {
         </div>
 
         {loading && (
-          <div className="flex justify-center items-center h-64">
-            <p className="text-lg">Loading search results...</p>
-          </div>
+          <LoadingSpinner label="Loading search results..." />
         )}
 
         {error && (

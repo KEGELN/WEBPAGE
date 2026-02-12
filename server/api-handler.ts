@@ -1,4 +1,5 @@
 // server/api-handler.ts
+import { unstable_cache } from 'next/cache';
 
 interface Season {
   season_id: string;
@@ -172,15 +173,15 @@ class APIHandler {
 
           gamesTotal: Number(row[4]),
           avgTotal: parseGermanNumber(row[5]),
-          mpTotal: Number(row[6]),
+          mpTotal: Number(row[6] ?? 0),
 
           gamesHome: Number(row[7]),
           avgHome: parseGermanNumber(row[8]),
-          mpHome: Number(row[9]),
+          mpHome: Number(row[9] ?? 0),
 
           gamesAway: Number(row[10]),
           avgAway: parseGermanNumber(row[11]),
-          mpAway: Number(row[12]),
+          mpAway: Number(row[12] ?? 0),
 
           bestGame: Number(row[13])
         };
@@ -199,6 +200,15 @@ class APIHandler {
     });
   }
 
+  /* ---------------- SPIELTAGE ---------------- */
+
+  async getSpieltage(leagueId?: string, seasonId?: string) {
+    return this.handleCommand("GetSpieltagArray", {
+      id_saison: seasonId || "11",
+      id_liga: leagueId || "0"
+    });
+  }
+
   /* ---------------- GAMES ---------------- */
 
   async getGames(params: Record<string, any>) {
@@ -208,24 +218,46 @@ class APIHandler {
   /* ---------------- GENERIC COMMAND HANDLER ---------------- */
 
   async handleCommand(command: string, params: Record<string, any>): Promise<any[][]> {
-    const body = new URLSearchParams({ command });
+    const fetchFromApi = async (cmd: string, p: Record<string, any>) => {
+      console.log(`Executing external API call for ${cmd}`); // Log to verify cache miss
+      const body = new URLSearchParams({ command: cmd });
 
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== "") body.append(k, String(v));
-    });
+      Object.entries(p).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") body.append(k, String(v));
+      });
 
-    const res = await fetch(this.SPORTWINNER_API_URL, {
-      method: "POST",
-      headers: {
-        Referer: this.SPORTWINNER_REFERER,
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-      },
-      body: body.toString()
-    });
+      const res = await fetch(this.SPORTWINNER_API_URL, {
+        method: "POST",
+        headers: {
+          Referer: this.SPORTWINNER_REFERER,
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+        },
+        body: body.toString()
+      });
 
-    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
 
-    return res.json();
+      return res.json();
+    };
+
+    // Create a cache key based on the command and params
+    // We sort keys to ensure purely order-independent caching for the same params
+    const sortedParams = Object.keys(params).sort().reduce((acc, key) => {
+      acc[key] = params[key];
+      return acc;
+    }, {} as Record<string, any>);
+
+    const cacheKey = `sportwinner-${command}-${JSON.stringify(sortedParams)}`;
+
+    // Use unstable_cache to cache the result
+    // Revalidating every 3600 seconds (1 hour) as requested
+    const getCachedResult = unstable_cache(
+      async () => fetchFromApi(command, params),
+      [command, JSON.stringify(sortedParams)], // Key parts
+      { revalidate: 3600, tags: ['sportwinner'] }
+    );
+
+    return getCachedResult();
   }
 }
 

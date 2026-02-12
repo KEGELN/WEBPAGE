@@ -47,6 +47,27 @@ interface Standings {
   punkte: number;
 }
 
+interface SpielplanEntry {
+  spieltag: string;
+  game_id: string;
+  game_nr: string;
+  date_time: string;
+  team_home: string;
+  team_away: string;
+  result: string;
+  points_home: string;
+  points_away: string;
+}
+
+interface SpieltagEntry {
+  id: string;
+  nr: string;
+  label: string;
+  status: string;
+}
+
+interface SpielInfoRow extends Array<string> {}
+
 class ApiService {
   private static instance: ApiService;
 
@@ -74,7 +95,7 @@ class ApiService {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`API-Anfrage fehlgeschlagen. Bitte aktualisiere die Seite. (Status ${response.status})`);
       }
 
       const data = await response.json();
@@ -217,6 +238,77 @@ class ApiService {
     }
 
     return [];
+  }
+
+  async getSpielplan(seasonId: string, leagueId: string): Promise<SpielplanEntry[]> {
+    const response = await this.makeRequest('GetSpielplan', {
+      id_saison: seasonId,
+      id_liga: leagueId,
+    });
+
+    if (Array.isArray(response)) {
+      return response.map((item: any[]) => ({
+        spieltag: String(item[0] ?? ''),
+        game_id: String(item[1] ?? ''),
+        game_nr: String(item[2] ?? ''),
+        date_time: String(item[3] ?? ''),
+        team_home: String(item[4] ?? ''),
+        team_away: String(item[5] ?? ''),
+        result: String(item[6] ?? ''),
+        points_home: String(item[7] ?? ''),
+        points_away: String(item[8] ?? ''),
+      }));
+    }
+
+    return [];
+  }
+
+  async getSpieltage(seasonId: string, leagueId: string): Promise<SpieltagEntry[]> {
+    const response = await this.makeRequest('GetSpieltagArray', {
+      id_saison: seasonId,
+      id_liga: leagueId,
+    });
+
+    if (Array.isArray(response)) {
+      return response.map((item: any[]) => ({
+        id: String(item[0] ?? ''),
+        nr: String(item[1] ?? ''),
+        label: String(item[2] ?? ''),
+        status: String(item[3] ?? ''),
+      }));
+    }
+
+    return [];
+  }
+
+  async getSpielerInfo(seasonId: string, gameId: string, wertung: number = 1): Promise<SpielInfoRow[]> {
+    const response = await this.makeRequest('GetSpielerInfo', {
+      id_saison: seasonId,
+      id_spiel: gameId,
+      wertung
+    });
+
+    if (Array.isArray(response)) {
+      return response as SpielInfoRow[];
+    }
+
+    return [];
+  }
+
+  async getGamesBySpieltag(seasonId: string, leagueId: string, spieltagId: string): Promise<any[]> {
+    const response = await this.makeRequest('GetSpiel', {
+      id_saison: seasonId,
+      id_klub: 0,
+      id_bezirk: 0,
+      id_liga: leagueId,
+      id_spieltag: spieltagId,
+      favorit: '',
+      art_bezirk: 1,
+      art_liga: 0,
+      art_spieltag: 2,
+    });
+
+    return Array.isArray(response) ? response : [];
   }
 
   async getSchnitt(seasonId?: string, leagueId?: string, clubId?: string, spieltagNr: number = 100, sort: number = 1, anzahl: number = 1): Promise<any[]> {

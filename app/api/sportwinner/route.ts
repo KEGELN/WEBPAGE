@@ -1,8 +1,5 @@
 import { NextRequest } from 'next/server';
-import APIHandler from '@/server/api-handler';
-
-// Create an instance of the API handler
-const apiHandler = new APIHandler();
+import { apiHandler } from '@/server';
 
 // Define the API schema
 const apiSchema = {
@@ -80,6 +77,9 @@ export async function POST(request: NextRequest) {
     // Use the API handler to process the command
     let result: any[];
 
+    const baseParams = Object.fromEntries(params);
+    delete (baseParams as any).command;
+
     switch(command) {
       case 'GetSaisonArray':
         const seasons = await apiHandler.getSeasons();
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
         break;
 
       case 'GetSpiel':
-        result = await apiHandler.getGames();
+        result = await apiHandler.handleCommand('GetSpiel', Object.fromEntries(params));
         break;
 
       case 'GetTabelle':
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
 
       default:
         // For other commands, try the generic handler
-        result = await apiHandler.handleCommand(command, Object.fromEntries(params));
+        result = await apiHandler.handleCommand(command, baseParams);
     }
 
     return Response.json(result);
@@ -183,6 +183,9 @@ export async function GET(request: NextRequest) {
   try {
     // Use the API handler to process the command
     let result: any[];
+
+    const baseParams = Object.fromEntries(searchParams);
+    delete (baseParams as any).command;
 
     switch(command) {
       case 'GetSaisonArray':
@@ -241,7 +244,7 @@ export async function GET(request: NextRequest) {
         break;
 
       case 'GetSpiel':
-        result = await apiHandler.getGames();
+        result = await apiHandler.handleCommand('GetSpiel', Object.fromEntries(searchParams));
         break;
 
       case 'GetTabelle':
@@ -256,7 +259,7 @@ export async function GET(request: NextRequest) {
 
       default:
         // For other commands, try the generic handler
-        result = await apiHandler.handleCommand(command, Object.fromEntries(searchParams));
+        result = await apiHandler.handleCommand(command, baseParams);
     }
 
     return Response.json(result);

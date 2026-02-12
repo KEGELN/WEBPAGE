@@ -39,10 +39,10 @@ class PlayerService {
     this.apiService = ApiService.getInstance();
   }
 
-  async getPlayerSchnitliste(seasonId?: string, leagueId?: string): Promise<Player[]> {
+  async getPlayerSchnitliste(seasonId?: string, leagueId?: string, spieltagNr?: number): Promise<Player[]> {
     try {
       // Use the API service to get full player stats with season and league filters
-      const rawPlayerData = await this.apiService.getFullPlayerStats(seasonId, leagueId);
+      const rawPlayerData = await this.apiService.getFullPlayerStats(seasonId, leagueId, spieltagNr);
 
       // Return the raw data directly since the component expects the detailed stats format
       return rawPlayerData as Player[];

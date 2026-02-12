@@ -2,75 +2,31 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import MagicBento from '@/components/MagicBento';
 import Menubar from '@/components/menubar';
 import PlayerService from '@/lib/player-service';
-import PlayerStatsBento from '@/components/PlayerStatsBento';
-import ApiService from '@/lib/api-service';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function Player() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const playerId = searchParams.get('id');
-  const [players, setPlayers] = useState<any[]>([]);
   const [playerStats, setPlayerStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedSeason, setSelectedSeason] = useState<string>('');
-  const [selectedLeague, setSelectedLeague] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [seasons, setSeasons] = useState<any[]>([]);
-  const [leagues, setLeagues] = useState<any[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [query, setQuery] = useState('');
 
   const playerService = new PlayerService();
-  const apiService = ApiService.getInstance();
 
   useEffect(() => {
-    const fetchFilters = async () => {
-      try {
-        // Fetch seasons
-        const seasonData = await apiService.getCurrentSeason();
-        setSeasons(seasonData);
+    if (!playerId) return;
 
-        // Fetch leagues
-        const leagueData = await apiService.getLeagues();
-        setLeagues(leagueData);
-      } catch (err) {
-        console.error('Error fetching filters:', err);
-      }
-    };
-
-    fetchFilters();
-  }, []);
-
-  // Extract unique categories from players data when players change
-  useEffect(() => {
-    if (players && players.length > 0) {
-      const uniqueCategories = Array.from(
-        new Set(players.map(player => player.category || 'Männer'))
-      ).sort();
-      setCategories(uniqueCategories);
-    }
-  }, [players]);
-
-  // Fetch data based on whether we have a player ID
-  useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        if (playerId) {
-          // Fetch specific player stats
-          const stats = await playerService.getPlayerStats(playerId);
-          setPlayerStats(stats);
-        } else {
-          // Fetch player schnitliste (list of players) with season, league, and category filters
-          const playerList = await playerService.getPlayerSchnitliste(selectedSeason, selectedLeague);
-          setPlayers(playerList);
-        }
+        const stats = await playerService.getPlayerStats(playerId);
+        setPlayerStats(stats);
       } catch (err) {
         setError('Failed to load player data. Please try again.');
         console.error(err);
@@ -79,458 +35,165 @@ export default function Player() {
       }
     };
 
-    // Only fetch player list when not viewing a specific player
-    if (!playerId) {
-      fetchData();
-    }
-  }, [playerId, selectedSeason, selectedLeague]);
+    fetchData();
+  }, [playerId]);
 
-  // Sort players based on sortConfig
-  const sortedPlayers = [...players].sort((a, b) => {
-    if (!sortConfig) return 0;
-
-    // Determine the values to compare based on the sort key
-    let aValue: any, bValue: any;
-    switch (sortConfig.key) {
-      case 'rank':
-        // For rank, sort by the original rank from the API
-        aValue = a.rank || 0;
-        bValue = b.rank || 0;
-        break;
-      case 'name':
-        aValue = a.name || '';
-        bValue = b.name || '';
-        break;
-      case 'club':
-        aValue = a.club || '';
-        bValue = b.club || '';
-        break;
-      case 'totalGames':
-        aValue = parseInt(a.gamesTotal || a.totalGames || a.games || 0);
-        bValue = parseInt(b.gamesTotal || b.totalGames || b.games || 0);
-        break;
-      case 'average':
-        // Convert German decimal notation (comma) to a number for comparison
-        aValue = parseFloat((a.avgTotal || a.average || a.schnitt || '0').replace(',', '.'));
-        bValue = parseFloat((b.avgTotal || b.average || b.schnitt || '0').replace(',', '.'));
-        break;
-      case 'points':
-        aValue = parseInt(a.mpTotal || a.points || 0);
-        bValue = parseInt(b.mpTotal || b.points || 0);
-        break;
-      case 'homeGames':
-        aValue = parseInt(a.gamesHome || a.homeGames || 0);
-        bValue = parseInt(b.gamesHome || b.homeGames || 0);
-        break;
-      case 'homeAverage':
-        aValue = parseFloat((a.avgHome || a.homeAverage || '0').replace(',', '.'));
-        bValue = parseFloat((b.avgHome || b.homeAverage || '0').replace(',', '.'));
-        break;
-      case 'homePoints':
-        aValue = parseInt(a.mpHome || a.homePoints || 0);
-        bValue = parseInt(b.mpHome || b.homePoints || 0);
-        break;
-      case 'awayGames':
-        aValue = parseInt(a.gamesAway || a.awayGames || 0);
-        bValue = parseInt(b.gamesAway || b.awayGames || 0);
-        break;
-      case 'awayAverage':
-        aValue = parseFloat((a.avgAway || a.awayAverage || '0').replace(',', '.'));
-        bValue = parseFloat((b.avgAway || b.awayAverage || '0').replace(',', '.'));
-        break;
-      case 'awayPoints':
-        aValue = parseInt(a.mpAway || a.awayPoints || 0);
-        bValue = parseInt(b.mpAway || b.awayPoints || 0);
-        break;
-      case 'best':
-        aValue = parseInt(a.bestGame || a.best || 0);
-        bValue = parseInt(b.bestGame || b.best || 0);
-        break;
-      default:
-        return 0;
-    }
-
-    // Perform the comparison
-    if (aValue < bValue) {
-      return sortConfig.direction === 'asc' ? -1 : 1;
-    }
-    if (aValue > bValue) {
-      return sortConfig.direction === 'asc' ? 1 : -1;
-    }
-    return 0;
-  });
-
-  // Filter players based on selected category
-  const filteredPlayers = selectedCategory
-    ? sortedPlayers.filter(player => (player.category || 'Männer') === selectedCategory)
-    : sortedPlayers;
-
-  // Handle season filter change
-  const handleSeasonChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedSeason(e.target.value);
-  };
-
-  // Handle league filter change
-  const handleLeagueChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedLeague(e.target.value);
-  };
-
-  const handlePlayerClick = (playerName: string) => {
-    // Redirect to search page with the player's name pre-filled
-    router.push(`/search?q=${encodeURIComponent(playerName)}`);
-  };
-
-  const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+    router.push(`/search?q=${encodeURIComponent(query.trim())}`);
   };
 
   return (
-      <div className="min-h-screen bg-background">
-          <Menubar />
-          <main className="container mx-auto px-4 py-8">
-              <div className="mb-8">
-                  <h1 className="text-3xl font-bold text-foreground">
-                      {playerId ? 'Player Details' : 'Player Overview'}
-                  </h1>
-                  <p className="text-muted-foreground">
-                      {playerId
-                      ? `Details for player: ${playerStats?.playerName || 'Loading...'}`
-                      : 'Browse player statistics and information'}
-                  </p>
+    <div className="min-h-screen bg-background">
+      <Menubar />
+      <main className="container mx-auto px-4 py-8">
+        <div className="mb-8 rounded-2xl border border-border bg-gradient-to-br from-red-500/15 via-background to-rose-500/10 p-6 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Spieler</div>
+              <h1 className="text-3xl font-bold text-foreground">
+                {playerId ? 'Spieler-Details' : 'Spieler'}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {playerId
+                  ? `Details zu: ${playerStats?.playerName || 'Lädt…'}`
+                  : 'Suche einen Spieler, um Informationen anzuzeigen.'}
+              </p>
+            </div>
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Spieler suchen..."
+                className="w-56 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <button
+                type="submit"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+              >
+                Suchen
+              </button>
+            </form>
+          </div>
+        </div>
 
-                  {/* Filter controls for seasons, leagues, and categories */}
-                  {!playerId && (
-                      <div className="mt-4 flex flex-wrap gap-4 items-end">
-                          <div className="flex flex-col">
-                              <label htmlFor="seasonFilter" className="text-sm font-medium text-foreground mb-1">
-                                  Season
-                              </label>
-                              <select
-                                  id="seasonFilter"
-                                  value={selectedSeason}
-                                  onChange={handleSeasonChange}
-                                  className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                              >
-                                  <option value="">All Seasons</option>
-                                  {seasons.map((season) => (
-                                      <option key={season.season_id} value={season.season_id}>
-                                          {season.yearof_season} (ID: {season.season_id})
-                                      </option>
-                                  ))}
-                              </select>
-                          </div>
+        {!playerId && (
+          <div className="bg-muted rounded-xl p-8 text-center">
+            <p className="text-muted-foreground">
+              Öffne die Tabellen, um die komplette Spielerliste und Statistiken zu sehen.
+            </p>
+          </div>
+        )}
 
-                          <div className="flex flex-col">
-                              <label htmlFor="leagueFilter" className="text-sm font-medium text-foreground mb-1">
-                                  League
-                              </label>
-                              <select
-                                  id="leagueFilter"
-                                  value={selectedLeague}
-                                  onChange={handleLeagueChange}
-                                  className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                              >
-                                  <option value="">All Leagues</option>
-                                  {leagues.map((league) => (
-                                      <option key={league.liga_id} value={league.liga_id}>
-                                          {league.name_der_liga}
-                                      </option>
-                                  ))}
-                              </select>
-                          </div>
+        {loading && (
+          <LoadingSpinner label="Spielerdaten werden geladen..." size="lg" overlay />
+        )}
 
-                          <div className="flex flex-col">
-                              <label htmlFor="categoryFilter" className="text-sm font-medium text-foreground mb-1">
-                                  Kategorie
-                              </label>
-                              <select
-                                  id="categoryFilter"
-                                  value={selectedCategory}
-                                  onChange={(e) => setSelectedCategory(e.target.value)}
-                                  className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                              >
-                                  <option value="">All Categories</option>
-                                  {categories.map((category) => (
-                                      <option key={category} value={category}>
-                                          {category}
-                                      </option>
-                                  ))}
-                              </select>
-                          </div>
-                      </div>
-                  )}
+        {error && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && playerId && playerStats && (
+          <div className="space-y-8">
+            <div className="card-grid bento-section max-w-6xl mx-auto">
+              <div className="magic-bento-card magic-bento-card--border-glow">
+                <div className="magic-bento-card__header">
+                  <div className="magic-bento-card__label">Spiele</div>
+                </div>
+                <div className="magic-bento-card__content">
+                  <h2 className="magic-bento-card__title text-3xl font-bold">{playerStats.gamesPlayed}</h2>
+                  <p className="magic-bento-card__description">Gesamtspiele</p>
+                </div>
               </div>
 
-              {loading && (
-                  <div className="flex justify-center items-center h-64">
-                      <p className="text-lg">Loading player data...</p>
+              <div className="magic-bento-card magic-bento-card--border-glow">
+                <div className="magic-bento-card__header">
+                  <div className="magic-bento-card__label">Siege</div>
+                </div>
+                <div className="magic-bento-card__content">
+                  <h2 className="magic-bento-card__title text-3xl font-bold">{playerStats.wins}</h2>
+                  <p className="magic-bento-card__description">Gesamtsiege</p>
+                </div>
+              </div>
+
+              <div className="magic-bento-card magic-bento-card--border-glow">
+                <div className="magic-bento-card__header">
+                  <div className="magic-bento-card__label">Niederlagen</div>
+                </div>
+                <div className="magic-bento-card__content">
+                  <h2 className="magic-bento-card__title text-3xl font-bold">{playerStats.losses}</h2>
+                  <p className="magic-bento-card__description">Gesamtniederlagen</p>
+                </div>
+              </div>
+
+              <div className="magic-bento-card magic-bento-card--border-glow">
+                <div className="magic-bento-card__header">
+                  <div className="magic-bento-card__label">Rang</div>
+                </div>
+                <div className="magic-bento-card__content">
+                  <h2 className="magic-bento-card__title text-3xl font-bold">{playerStats.ranking}</h2>
+                  <p className="magic-bento-card__description">Aktueller Rang</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-12 max-w-5xl mx-auto">
+              <h2 className="text-2xl font-bold mb-6 text-center text-foreground">Leistung</h2>
+              <div className="card-grid bento-section">
+                <div className="magic-bento-card magic-bento-card--border-glow">
+                  <div className="magic-bento-card__header">
+                    <div className="magic-bento-card__label">Spieler-Stats</div>
                   </div>
-              )}
-
-              {error && (
-                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
-                      {error}
-                  </div>
-              )}
-
-              {!loading && !error && !playerId && players.length > 0 && (
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                      <table className="min-w-full bg-card rounded-lg overflow-hidden border border-border">
-                          <thead className="bg-muted">
-                              <tr>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
-                                      onClick={() => handleSort('rank')}
-                                  >
-                                      Pl.
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
-                                      onClick={() => handleSort('name')}
-                                  >
-                                      Spieler
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
-                                      onClick={() => handleSort('category')}
-                                  >
-                                      Kategorie
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
-                                      onClick={() => handleSort('club')}
-                                  >
-                                      Klub
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
-                                      onClick={() => handleSort('totalGames')}
-                                  >
-                                      Sp.
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
-                                      onClick={() => handleSort('average')}
-                                  >
-                                      ∅
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors"
-                                      onClick={() => handleSort('points')}
-                                  >
-                                      MP
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
-                                      onClick={() => handleSort('homeGames')}
-                                  >
-                                      Sp. (Heim)
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
-                                      onClick={() => handleSort('homeAverage')}
-                                  >
-                                      ∅ (Heim)
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
-                                      onClick={() => handleSort('homePoints')}
-                                  >
-                                      MP (Heim)
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
-                                      onClick={() => handleSort('awayGames')}
-                                  >
-                                      Sp. (Ausw)
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
-                                      onClick={() => handleSort('awayAverage')}
-                                  >
-                                      ∅ (Ausw)
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
-                                      onClick={() => handleSort('awayPoints')}
-                                  >
-                                      MP (Ausw)
-                                  </th>
-                                  <th
-                                      className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors less720px"
-                                      onClick={() => handleSort('best')}
-                                  >
-                                      Best
-                                  </th>
-                              </tr>
-                          </thead>
-                          <tbody>
-                              {filteredPlayers.map((player, index) => (
-                                  <tr key={player.id ?? index} className="border-b border-border hover:bg-accent/50 transition-colors cursor-pointer" onClick={() => handlePlayerClick(player.name)}><td className="py-3 px-4">{player.rank}</td>
-
-                                      <td className="py-3 px-4 font-medium text-foreground">
-                                          {player.name}
-                                      </td>
-
-                                      <td className="py-3 px-4">{player.category}</td>  {/* This was missing! */}
-
-                                      <td className="py-3 px-4">{player.club}</td>
-
-                                      {/* TOTAL */}
-                                      <td className="py-3 px-4">{player.gamesTotal}</td>
-                                      <td className="py-3 px-4">{player.avgTotal}</td>
-                                      <td className="py-3 px-4">{player.mpTotal}</td>
-
-                                      {/* HOME */}
-                                      <td className="py-3 px-4 less720px">{player.gamesHome}</td>
-                                      <td className="py-3 px-4 less720px">{player.avgHome}</td>
-                                      <td className="py-3 px-4 less720px">{player.mpHome}</td>
-
-                                      {/* AWAY */}
-                                      <td className="py-3 px-4 less720px">{player.gamesAway}</td>
-                                      <td className="py-3 px-4 less720px">{player.avgAway}</td>
-                                      <td className="py-3 px-4 less720px">{player.mpAway}</td>
-
-                                      {/* BEST */}
-                                      <td className="py-3 px-4 less720px">{player.bestGame}</td>    
-                                  </tr>
-                              ))}
-                          </tbody>
-
-                      </table>
-                  </div>
-              )}
-
-              {!loading && !error && !playerId && players.length === 0 && (
-                  <div className="text-center py-12">
-                      <p className="text-lg text-muted-foreground">No players found</p>
-                  </div>
-              )}
-
-              {!loading && !error && playerId && playerStats && (
-                  <div className="space-y-8">
-                  {/* Player Stats Summary as Magic Bento Cards with Purple Glow Theme */}
-                  <div className="card-grid bento-section max-w-6xl mx-auto">
-                      <div className="magic-bento-card magic-bento-card--border-glow">
-                          <div className="magic-bento-card__header">
-                              <div className="magic-bento-card__label">
-                                  Games Played
-                              </div>
-                          </div>
-                          <div className="magic-bento-card__content">
-                              <h2 className="magic-bento-card__title text-3xl font-bold">{playerStats.gamesPlayed}</h2>
-                              <p className="magic-bento-card__description">Total games played</p>
-                          </div>
+                  <div className="magic-bento-card__content">
+                    <h2 className="magic-bento-card__title text-xl font-semibold">{playerStats.playerName}</h2>
+                    <p className="magic-bento-card__description">Spieler-Statistiken</p>
+                    <div className="mt-4 space-y-3">
+                      <div className="flex justify-between items-center border-b border-border/30 pb-2">
+                        <span className="text-foreground/80">Spiele</span>
+                        <span className="font-semibold text-primary">{playerStats.gamesPlayed}</span>
                       </div>
-
-                      <div className="magic-bento-card magic-bento-card--border-glow">
-                          <div className="magic-bento-card__header">
-                              <div className="magic-bento-card__label">
-                                  Wins
-                              </div>
-                          </div>
-                          <div className="magic-bento-card__content">
-                              <h2 className="magic-bento-card__title text-3xl font-bold">{playerStats.wins}</h2>
-                              <p className="magic-bento-card__description">Total wins</p>
-                          </div>
+                      <div className="flex justify-between items-center border-b border-border/30 pb-2">
+                        <span className="text-foreground/80">Siege</span>
+                        <span className="font-semibold text-primary">{playerStats.wins}</span>
                       </div>
-
-                      <div className="magic-bento-card magic-bento-card--border-glow">
-                          <div className="magic-bento-card__header">
-                              <div className="magic-bento-card__label">
-                                  Losses
-                              </div>
-                          </div>
-                          <div className="magic-bento-card__content">
-                              <h2 className="magic-bento-card__title text-3xl font-bold">{playerStats.losses}</h2>
-                              <p className="magic-bento-card__description">Total losses</p>
-                          </div>
+                      <div className="flex justify-between items-center border-b border-border/30 pb-2">
+                        <span className="text-foreground/80">Niederlagen</span>
+                        <span className="font-semibold text-primary">{playerStats.losses}</span>
                       </div>
-
-                      <div className="magic-bento-card magic-bento-card--border-glow">
-                          <div className="magic-bento-card__header">
-                              <div className="magic-bento-card__label">
-                                  Ranking
-                              </div>
-                          </div>
-                          <div className="magic-bento-card__content">
-                              <h2 className="magic-bento-card__title text-3xl font-bold">{playerStats.ranking}</h2>
-                              <p className="magic-bento-card__description">Current ranking</p>
-                          </div>
+                      <div className="flex justify-between items-center border-b border-border/30 pb-2">
+                        <span className="text-foreground/80">Rang</span>
+                        <span className="font-semibold text-primary">{playerStats.ranking}</span>
                       </div>
-                  </div>
-
-                  {/* Player Performance Bento Card with Purple Glow Theme */}
-                  <div className="mt-12 max-w-5xl mx-auto">
-                      <h2 className="text-2xl font-bold mb-6 text-center text-foreground">Player Performance</h2>
-                      <div className="card-grid bento-section">
-                          <div className="magic-bento-card magic-bento-card--border-glow">
-                              <div className="magic-bento-card__header">
-                                  <div className="magic-bento-card__label">
-                                      Player Stats
-                                  </div>
-                              </div>
-                              <div className="magic-bento-card__content">
-                                  <h2 className="magic-bento-card__title text-xl font-semibold">{playerStats.playerName}</h2>
-                                  <p className="magic-bento-card__description">Player Performance Statistics</p>
-                                  <div className="mt-4 space-y-3">
-                                      <div className="flex justify-between items-center border-b border-border/30 pb-2">
-                                          <span className="text-foreground/80">Games Played</span>
-                                          <span className="font-semibold text-primary">{playerStats.gamesPlayed}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center border-b border-border/30 pb-2">
-                                          <span className="text-foreground/80">Wins</span>
-                                          <span className="font-semibold text-primary">{playerStats.wins}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center border-b border-border/30 pb-2">
-                                          <span className="text-foreground/80">Losses</span>
-                                          <span className="font-semibold text-primary">{playerStats.losses}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center border-b border-border/30 pb-2">
-                                          <span className="text-foreground/80">Ranking</span>
-                                          <span className="font-semibold text-primary">{playerStats.ranking}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center border-b border-border/30 pb-2">
-                                          <span className="text-foreground/80">Average Score</span>
-                                          <span className="font-semibold text-primary">{playerStats.averageScore}</span>
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
+                      <div className="flex justify-between items-center border-b border-border/30 pb-2">
+                        <span className="text-foreground/80">Schnitt</span>
+                        <span className="font-semibold text-primary">{playerStats.averageScore}</span>
                       </div>
+                    </div>
                   </div>
+                </div>
+              </div>
+            </div>
 
-                  {/* Detailed Player Stats as Magic Bento Cards with Purple Glow Theme */}
-                  <div className="mt-8 max-w-5xl mx-auto">
-                      <h2 className="text-2xl font-bold mb-6 text-center text-foreground">Detailed Statistics</h2>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="magic-bento-card magic-bento-card--border-glow p-6">
-                              <h3 className="text-lg font-semibold mb-2 text-foreground">Player Name</h3>
-                              <p className="text-foreground/80">{playerStats.playerName}</p>
-                          </div>
-                          <div className="magic-bento-card magic-bento-card--border-glow p-6">
-                              <h3 className="text-lg font-semibold mb-2 text-foreground">Average Score</h3>
-                              <p className="text-foreground/80">{playerStats.averageScore}</p>
-                          </div>
-                      </div>
-                  </div>
-
-                  {/* Back to player list */}
-                  <div className="mt-8 text-center">
-                      <button
-                          onClick={() => router.push('/player')}
-                          className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
-                      >
-                          Back to Player List
-                      </button>
-                  </div>
-                  </div>
-              )}
-          </main>
-      </div>
+            <div className="mt-8 max-w-5xl mx-auto">
+              <h2 className="text-2xl font-bold mb-6 text-center text-foreground">Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="magic-bento-card magic-bento-card--border-glow p-6">
+                  <h3 className="text-lg font-semibold mb-2 text-foreground">Spielername</h3>
+                  <p className="text-foreground/80">{playerStats.playerName}</p>
+                </div>
+                <div className="magic-bento-card magic-bento-card--border-glow p-6">
+                  <h3 className="text-lg font-semibold mb-2 text-foreground">Schnitt</h3>
+                  <p className="text-foreground/80">{playerStats.averageScore}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
