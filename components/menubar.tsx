@@ -63,7 +63,7 @@ export default function Menubar() {
                                   value={searchQuery}
                                   onChange={(e) => setSearchQuery(e.target.value)}
                                   placeholder="Search..."
-                                  className="w-48 py-2 px-4 pr-10 rounded-lg bg-muted text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:bg-accent transition-all duration-200 shadow-sm"
+                                  className="w-72 lg:w-80 py-2.5 px-4 pr-10 rounded-lg bg-muted text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:bg-accent transition-all duration-200 shadow-sm"
                               />
                               <button
                                   type="submit"
@@ -101,7 +101,7 @@ export default function Menubar() {
                                   value={searchQuery}
                                   onChange={(e) => setSearchQuery(e.target.value)}
                                   placeholder="Search clubs, players..."
-                                  className="w-full py-3 px-4 pr-12 rounded-lg bg-muted text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:bg-accent shadow-md"
+                                  className="w-full py-3.5 px-4 pr-12 rounded-lg bg-muted text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:bg-accent shadow-md"
                               />
                               <button
                                   type="submit"
