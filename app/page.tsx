@@ -84,14 +84,14 @@ export default function Home() {
           <div>
             <h3 className="text-lg font-semibold text-foreground">Impressum</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Sportwinner Software • Am Hoffeld 17 • 97265 Hettstadt
+              Lennard Sdrojek / KSC RW Berliner
             </p>
-            <p className="text-sm text-muted-foreground">Vertreten durch: Ivan Kerentchev</p>
+            <p className="text-sm text-muted-foreground">Hämmerlingstr. 88 • Berlin Köpenick</p>
+            <p className="text-sm text-muted-foreground">Vertreten durch: Lennard Sdrojek</p>
           </div>
           <div>
             <h3 className="text-lg font-semibold text-foreground">Kontakt</h3>
-            <p className="mt-2 text-sm text-muted-foreground">E-Mail: support@sportwinner.de</p>
-            <p className="text-sm text-muted-foreground">Telefon: +49 151 55657411 (Mo–Fr 18–20 Uhr)</p>
+            <p className="mt-2 text-sm text-muted-foreground">E-Mail: lennard.sdrojek@osz-lise-meitner.eu</p>
           </div>
         </div>
       </footer>
