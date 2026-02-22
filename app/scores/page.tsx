@@ -224,6 +224,15 @@ export default function ScoresPage() {
     setSortConfig({ key, direction });
   };
 
+  const handleTeamScheduleClick = (teamName: string) => {
+    if (!teamName) return;
+    const params = new URLSearchParams();
+    if (selectedSeason) params.set('season', selectedSeason);
+    if (selectedLeague) params.set('league', selectedLeague);
+    params.set('team', teamName);
+    router.push(`/tournaments?${params.toString()}`);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Menubar />
@@ -428,7 +437,15 @@ export default function ScoresPage() {
                             return (
                               <tr key={`${row[0]}-${idx}`} className="border-b border-border">
                                 <td className="py-3 px-4">{displayValue(pos)}</td>
-                                <td className="py-3 px-4 font-medium text-foreground min-w-[16rem] whitespace-nowrap">{displayValue(team)}</td>
+                                <td className="py-3 px-4 font-medium text-foreground min-w-[16rem] whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTeamScheduleClick(String(team || ''))}
+                                    className="text-left underline decoration-dotted underline-offset-4 hover:text-primary"
+                                  >
+                                    {displayValue(team)}
+                                  </button>
+                                </td>
                                 <td className="py-3 px-4 text-center">{displayValue(spTotal)}</td>
                             <td className="py-3 px-4 text-center whitespace-nowrap">{displayValue(tpTotal)}</td>
                                 <td className="py-3 px-4 text-center">{displayValue(mpTotal)}</td>
