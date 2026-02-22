@@ -70,6 +70,7 @@ interface SpielInfoRow extends Array<string> {}
 
 class ApiService {
   private static instance: ApiService;
+  private static readonly REQUEST_TIMEOUT_MS = 15000;
 
   static getInstance(): ApiService {
     if (!ApiService.instance) {
@@ -86,23 +87,33 @@ class ApiService {
     });
 
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), ApiService.REQUEST_TIMEOUT_MS);
       const response = await fetch('/api/sportwinner', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: formData.toString()
+        body: formData.toString(),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (!response.ok) {
-        throw new Error(`API-Anfrage fehlgeschlagen. Bitte aktualisiere die Seite. (Status ${response.status})`);
+        // Some seasons/leagues return intermittent 500 from upstream.
+        // Keep the UI functional and let callers continue with partial data.
+        console.warn(`Sportwinner request failed for ${command} with status ${response.status}`);
+        return [];
       }
 
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error(`Error making request for command ${command}:`, error);
-      // Return empty data as fallback
+      if ((error as { name?: string })?.name === 'AbortError') {
+        console.warn(`Sportwinner request timed out for ${command}`);
+        return [];
+      }
+      console.warn(`Error making request for command ${command}:`, error);
       return [];
     }
   }

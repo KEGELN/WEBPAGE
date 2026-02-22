@@ -235,7 +235,11 @@ class APIHandler {
         body: body.toString()
       });
 
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      if (!res.ok) {
+        const upstreamError = new Error(`HTTP error ${res.status}`) as Error & { status?: number };
+        upstreamError.status = res.status;
+        throw upstreamError;
+      }
 
       return res.json();
     };

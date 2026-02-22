@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Menubar from '@/components/menubar';
 import ApiService from '@/lib/api-service';
@@ -128,7 +128,7 @@ function extractDateOnly(value: string): string {
   return dateMatch ? dateMatch[0].trim() : text.replace(/\s*[-|]?\s*\d{1,2}:\d{2}.*$/, '').trim();
 }
 
-export default function TournamentsPage() {
+function TournamentsPageContent() {
   const apiService = ApiService.getInstance();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -162,9 +162,6 @@ export default function TournamentsPage() {
       try {
         const seasonData = await apiService.getCurrentSeason();
         setSeasons(seasonData);
-
-        const leagueData = await apiService.getLeagues();
-        setLeagues(leagueData);
       } catch (err) {
         console.error('Error fetching filters:', err);
       }
@@ -190,6 +187,33 @@ export default function TournamentsPage() {
       : false;
     setSelectedLeague(isValidRequestedLeague ? String(requestedLeague) : String(leagues[0].liga_id));
   }, [searchParams, leagues, selectedLeague]);
+
+  useEffect(() => {
+    const fetchLeaguesForSeason = async () => {
+      if (!selectedSeason) return;
+      try {
+        const leagueData = (await apiService.getLeagues(selectedSeason)) as LeagueOption[];
+        setLeagues(leagueData);
+        const requestedLeague = searchParams.get('league');
+        setSelectedLeague((prev) => {
+          if (leagueData.length === 0) return '';
+          const previousIsValid = leagueData.some((league) => String(league.liga_id) === String(prev));
+          if (previousIsValid) return prev;
+          const requestedIsValid = requestedLeague
+            ? leagueData.some((league) => String(league.liga_id) === String(requestedLeague))
+            : false;
+          if (requestedIsValid) return String(requestedLeague);
+          return String(leagueData[0].liga_id);
+        });
+      } catch (err) {
+        console.error('Error fetching leagues for season:', err);
+        setLeagues([]);
+        setSelectedLeague('');
+      }
+    };
+
+    fetchLeaguesForSeason();
+  }, [apiService, searchParams, selectedSeason]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -245,9 +269,29 @@ export default function TournamentsPage() {
     appliedQueryTeamRef.current = true;
   }, [searchParams, spiele]);
 
-  const displayValue = (value: unknown) => {
+  const displayValue = (value: unknown): React.ReactNode => {
     if (value === null || value === undefined || value === '') return '-';
-    return value;
+    if (typeof value === 'string' || typeof value === 'number') return value;
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    return String(value);
+  };
+
+  const handleSeasonChange = (nextSeason: string) => {
+    if (nextSeason === selectedSeason) return;
+    // Reset dependent filters/data so season switch always refetches fresh leagues/tables.
+    setSelectedSeason(nextSeason);
+    setSelectedLeague('');
+    setSelectedTeam('');
+    setSpiele([]);
+    setSpieltagMap({});
+    setGameDetails({});
+    setDetailsLoading({});
+    setGameNotes({});
+    setOpenGameId(null);
+    setError(null);
+    appliedQueryTeamRef.current = false;
+    notifiedKeysRef.current.clear();
+    knownResultsRef.current = {};
   };
 
   const teamOptions = useMemo(() => {
@@ -691,7 +735,7 @@ export default function TournamentsPage() {
       ctx.lineTo(tableX + tableWidth, rowY + rowHeight);
       ctx.stroke();
 
-      const isTotals = isTotalsRow(row);
+      const isTotals = Boolean(isTotalsRow(row));
       const leftTotal = totalsRow ? Number(totalsRow[5]) : null;
       const rightTotal = totalsRow ? Number(totalsRow[10]) : null;
       const diff =
@@ -889,7 +933,7 @@ export default function TournamentsPage() {
               <select
                 id="seasonFilter"
                 value={selectedSeason}
-                onChange={(e) => setSelectedSeason(e.target.value)}
+                onChange={(e) => handleSeasonChange(e.target.value)}
                 className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 {seasons.map((season) => (
@@ -1067,5 +1111,13 @@ export default function TournamentsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function TournamentsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <TournamentsPageContent />
+    </Suspense>
   );
 }

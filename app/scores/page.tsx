@@ -33,16 +33,13 @@ export default function ScoresPage() {
       try {
         const seasonData = await apiService.getCurrentSeason();
         setSeasons(seasonData);
-
-        const leagueData = await apiService.getLeagues();
-        setLeagues(leagueData);
       } catch (err) {
         console.error('Error fetching filters:', err);
       }
     };
 
     fetchFilters();
-  }, []);
+  }, [apiService]);
 
   useEffect(() => {
     if (!selectedSeason && seasons.length > 0) {
@@ -55,6 +52,27 @@ export default function ScoresPage() {
       setSelectedLeague(leagues[0].liga_id);
     }
   }, [leagues, selectedLeague]);
+
+  useEffect(() => {
+    const fetchLeaguesForSeason = async () => {
+      if (!selectedSeason) return;
+      try {
+        const leagueData = await apiService.getLeagues(selectedSeason);
+        setLeagues(leagueData);
+        setSelectedLeague((prev) => {
+          if (leagueData.length === 0) return '';
+          const hasPrevious = leagueData.some((league) => String(league.liga_id) === String(prev));
+          return hasPrevious ? prev : String(leagueData[0].liga_id);
+        });
+      } catch (err) {
+        console.error('Error fetching leagues for season:', err);
+        setLeagues([]);
+        setSelectedLeague('');
+      }
+    };
+
+    fetchLeaguesForSeason();
+  }, [apiService, selectedSeason]);
 
   useEffect(() => {
     const fetchSpieltage = async () => {
@@ -97,6 +115,19 @@ export default function ScoresPage() {
       direction = 'desc';
     }
     setStandingsSort({ key, direction });
+  };
+
+  const handleSeasonChange = (nextSeason: string) => {
+    if (nextSeason === selectedSeason) return;
+    // Force a fresh data chain for the new season.
+    setSelectedSeason(nextSeason);
+    setSelectedLeague('');
+    setSpieltage([]);
+    setSelectedSpieltag('100');
+    setStandings([]);
+    setPlayers([]);
+    setCategories([]);
+    setSelectedCategory('');
   };
 
   useEffect(() => {
@@ -264,7 +295,7 @@ export default function ScoresPage() {
               <select
                 id="seasonFilter"
                 value={selectedSeason}
-                onChange={(e) => setSelectedSeason(e.target.value)}
+                onChange={(e) => handleSeasonChange(e.target.value)}
                 className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Alle Saisons</option>
@@ -371,19 +402,19 @@ export default function ScoresPage() {
                         case 'spTotal':
                           return Number(row[4] || 0);
                         case 'tpTotal':
-                          return Number(row[7] || 0) - Number(row[8] || 0);
+                          return Number(row[7] || 0) - Number(row[10] || 0);
                         case 'mpTotal':
                           return Number(row[13] || 0);
                         case 'spHome':
                           return Number(row[5] || 0);
                         case 'tpHome':
-                          return Number(row[9] || 0) - Number(row[10] || 0);
+                          return Number(row[8] || 0) - Number(row[11] || 0);
                         case 'mpHome':
                           return Number(row[14] || 0);
                         case 'spAway':
                           return Number(row[6] || 0);
                         case 'tpAway':
-                          return Number(row[11] || 0) - Number(row[12] || 0);
+                          return Number(row[9] || 0) - Number(row[12] || 0);
                         case 'mpAway':
                           return Number(row[15] || 0);
                         default:
@@ -427,9 +458,9 @@ export default function ScoresPage() {
                             const spTotal = row[4];
                             const spHome = row[5];
                             const spAway = row[6];
-                            const tpTotal = `${row[7]}-${row[8]}`;
-                            const tpHome = `${row[9]}-${row[10]}`;
-                            const tpAway = `${row[11]}-${row[12]}`;
+                            const tpTotal = `${row[7]}-${row[10]}`;
+                            const tpHome = `${row[8]}-${row[11]}`;
+                            const tpAway = `${row[9]}-${row[12]}`;
                             const mpTotal = row[13];
                             const mpHome = row[14];
                             const mpAway = row[15];

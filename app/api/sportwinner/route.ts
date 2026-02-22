@@ -101,7 +101,8 @@ export async function POST(request: NextRequest) {
         break;
 
       case 'GetBezirkArray':
-        const districts = await apiHandler.getDistricts();
+        const districtSeasonId = params.get('id_saison') || undefined;
+        const districts = await apiHandler.getDistricts(districtSeasonId);
         result = districts.map(district => [
           district.bezirk_id,
           district.name_des_bezirks
@@ -109,7 +110,11 @@ export async function POST(request: NextRequest) {
         break;
 
       case 'GetLigaArray':
-        const leagues = await apiHandler.getLeagues();
+        const leagueSeasonId = params.get('id_saison') || undefined;
+        const leagueDistrictId = params.get('id_bezirk') || undefined;
+        const leagueFavorit = params.get('favorit') || '';
+        const leagueArt = params.get('art') || undefined;
+        const leagues = await apiHandler.getLeagues(leagueSeasonId, leagueDistrictId, leagueFavorit, leagueArt);
         result = leagues.map(league => [
           league.liga_id,
           '', // Placeholder
@@ -157,9 +162,15 @@ export async function POST(request: NextRequest) {
 
     return Response.json(result);
   } catch (error: any) {
-    console.error('Error processing API request:', error.message);
+    const status = Number(error?.status);
+    const message = String(error?.message || 'Unknown error');
+    if (status === 403 || status === 429 || message.includes('HTTP error 403') || message.includes('HTTP error 429')) {
+      console.warn('Upstream blocked request, returning empty result:', message);
+      return Response.json([]);
+    }
+    console.error('Error processing API request:', message);
     // Return error that can trigger a popup on the frontend
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: message }, { status: 500 });
   }
 }
 
@@ -208,7 +219,8 @@ export async function GET(request: NextRequest) {
         break;
 
       case 'GetBezirkArray':
-        const districts = await apiHandler.getDistricts();
+        const districtSeasonId = searchParams.get('id_saison') || undefined;
+        const districts = await apiHandler.getDistricts(districtSeasonId);
         result = districts.map(district => [
           district.bezirk_id,
           district.name_des_bezirks
@@ -216,7 +228,11 @@ export async function GET(request: NextRequest) {
         break;
 
       case 'GetLigaArray':
-        const leagues = await apiHandler.getLeagues();
+        const leagueSeasonId = searchParams.get('id_saison') || undefined;
+        const leagueDistrictId = searchParams.get('id_bezirk') || undefined;
+        const leagueFavorit = searchParams.get('favorit') || '';
+        const leagueArt = searchParams.get('art') || undefined;
+        const leagues = await apiHandler.getLeagues(leagueSeasonId, leagueDistrictId, leagueFavorit, leagueArt);
         result = leagues.map(league => [
           league.liga_id,
           '', // Placeholder
@@ -264,8 +280,14 @@ export async function GET(request: NextRequest) {
 
     return Response.json(result);
   } catch (error: any) {
-    console.error('Error processing API request:', error.message);
+    const status = Number(error?.status);
+    const message = String(error?.message || 'Unknown error');
+    if (status === 403 || status === 429 || message.includes('HTTP error 403') || message.includes('HTTP error 429')) {
+      console.warn('Upstream blocked request, returning empty result:', message);
+      return Response.json([]);
+    }
+    console.error('Error processing API request:', message);
     // Return error that can trigger a popup on the frontend
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: message }, { status: 500 });
   }
 }

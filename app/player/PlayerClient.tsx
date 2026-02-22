@@ -6,11 +6,20 @@ import Menubar from '@/components/menubar';
 import PlayerService from '@/lib/player-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
+interface PlayerStats {
+  playerName: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  ranking: number;
+  averageScore: string | number;
+}
+
 export default function PlayerClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const playerId = searchParams.get('id');
-  const [playerStats, setPlayerStats] = useState<any>(null);
+  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -25,7 +34,7 @@ export default function PlayerClient() {
       setError(null);
 
       try {
-        const stats = await playerService.getPlayerStats(playerId);
+        const stats = (await playerService.getPlayerStats(playerId)) as PlayerStats;
         setPlayerStats(stats);
       } catch (err) {
         setError('Spielerdaten konnten nicht geladen werden. Bitte versuche es erneut.');
