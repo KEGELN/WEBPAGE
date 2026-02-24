@@ -141,6 +141,17 @@ function extractDateOnly(value: string): string {
   return dateMatch ? dateMatch[0].trim() : text.replace(/\s*[-|]?\s*\d{1,2}:\d{2}.*$/, '').trim();
 }
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 function TournamentsPageContent() {
   const apiService = ApiService.getInstance();
   const searchParams = useSearchParams();
@@ -428,14 +439,44 @@ function TournamentsPageContent() {
     }
     if (typeof window === 'undefined') return;
 
-    const key = `${selectedSeason}:${selectedLeague}:${selectedTeam}`;
-    const raw = window.localStorage.getItem('kegel:teamSubscriptions');
-    const subscriptions = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
-    setIsSubscribedForTeam(Boolean(subscriptions[key]));
+    let cancelled = false;
+    const run = async () => {
+      try {
+        if (!('serviceWorker' in navigator)) return;
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        const subscription = await registration.pushManager.getSubscription();
+        const endpoint = subscription?.endpoint || '';
+        if (!endpoint) {
+          if (!cancelled) {
+            setIsSubscribedForTeam(false);
+            setActiveSubscribedGameIds([]);
+          }
+          return;
+        }
 
-    const activeRaw = window.localStorage.getItem('kegel:teamActiveGameIds');
-    const activeMap = activeRaw ? (JSON.parse(activeRaw) as Record<string, string[]>) : {};
-    setActiveSubscribedGameIds(Array.isArray(activeMap[key]) ? activeMap[key] : []);
+        const qs = new URLSearchParams({
+          season: selectedSeason,
+          league: selectedLeague,
+          team: selectedTeam,
+          endpoint,
+        });
+        const response = await fetch(`/api/notifications/status?${qs.toString()}`, {
+          method: 'GET',
+          cache: 'no-store',
+        });
+        const json = (await response.json()) as { subscribed?: boolean; activeGameIds?: string[] };
+        if (cancelled) return;
+        setIsSubscribedForTeam(Boolean(json.subscribed));
+        setActiveSubscribedGameIds(Array.isArray(json.activeGameIds) ? json.activeGameIds : []);
+      } catch (error) {
+        console.error('Failed to fetch notification status:', error);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedSeason, selectedLeague, selectedTeam]);
 
   useEffect(() => {
@@ -448,7 +489,6 @@ function TournamentsPageContent() {
     const checkLiveSubscribedGames = async () => {
       const now = new Date();
       const currentDateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-      const subscriptionKey = `${selectedSeason}:${selectedLeague}:${selectedTeam}`;
       const activeGames = sortedTeamGames.filter((game) => {
         const date = parseGameDate(game.date_time);
         if (!date) return false;
@@ -457,11 +497,6 @@ function TournamentsPageContent() {
       });
       const activeIds = activeGames.map((game) => String(game.game_id));
       setActiveSubscribedGameIds(activeIds);
-
-      const activeRaw = window.localStorage.getItem('kegel:teamActiveGameIds');
-      const activeMap = activeRaw ? (JSON.parse(activeRaw) as Record<string, string[]>) : {};
-      activeMap[subscriptionKey] = activeIds;
-      window.localStorage.setItem('kegel:teamActiveGameIds', JSON.stringify(activeMap));
 
       // Only fetch when a subscribed game is actually live.
       if (activeGames.length === 0) return;
@@ -584,20 +619,60 @@ function TournamentsPageContent() {
 
     if (permission === 'denied') return;
 
-    const key = `${selectedSeason}:${selectedLeague}:${selectedTeam}`;
-    const raw = window.localStorage.getItem('kegel:teamSubscriptions');
-    const subscriptions = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
-    const nextValue = !Boolean(subscriptions[key]);
-    subscriptions[key] = nextValue;
-    window.localStorage.setItem('kegel:teamSubscriptions', JSON.stringify(subscriptions));
-    if (!nextValue) {
-      const activeRaw = window.localStorage.getItem('kegel:teamActiveGameIds');
-      const activeMap = activeRaw ? (JSON.parse(activeRaw) as Record<string, string[]>) : {};
-      delete activeMap[key];
-      window.localStorage.setItem('kegel:teamActiveGameIds', JSON.stringify(activeMap));
-      setActiveSubscribedGameIds([]);
+    if (!('serviceWorker' in navigator)) return;
+    const registration = await navigator.serviceWorker.register('/sw.js');
+    let browserSubscription = await registration.pushManager.getSubscription();
+
+    if (!browserSubscription) {
+      const keyResponse = await fetch('/api/notifications/vapid-public-key', { cache: 'no-store' });
+      if (!keyResponse.ok) {
+        console.error('Missing VAPID public key on server');
+        return;
+      }
+      const keyJson = (await keyResponse.json()) as { key?: string };
+      if (!keyJson.key) return;
+      browserSubscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyJson.key) as BufferSource,
+      });
     }
-    setIsSubscribedForTeam(nextValue);
+
+    const endpoint = browserSubscription.endpoint;
+    const subscriptionPayload = browserSubscription.toJSON();
+    const body = {
+      season: selectedSeason,
+      league: selectedLeague,
+      team: selectedTeam,
+      endpoint,
+      subscription: subscriptionPayload,
+    };
+
+    if (isSubscribedForTeam) {
+      const res = await fetch('/api/notifications/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          season: selectedSeason,
+          league: selectedLeague,
+          team: selectedTeam,
+          endpoint,
+        }),
+      });
+      if (res.ok) {
+        setIsSubscribedForTeam(false);
+        setActiveSubscribedGameIds([]);
+      }
+      return;
+    }
+
+    const res = await fetch('/api/notifications/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      setIsSubscribedForTeam(true);
+    }
   };
 
   const downloadGameDetailsAsPng = async (game: SpielplanGame, rows: GameDetailRow[], notes?: string) => {
