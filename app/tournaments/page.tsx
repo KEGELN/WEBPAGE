@@ -87,6 +87,19 @@ function hasPlayedResult(value: string): boolean {
   return /\d/.test(trimmed);
 }
 
+function parseResultScore(value: string): { home: number; away: number } | null {
+  const match = String(value || '').match(/(\d+)\s*:\s*(\d+)/);
+  if (!match) return null;
+  return { home: Number(match[1]), away: Number(match[2]) };
+}
+
+function parseCellNumber(value: GameDetailCell): number | null {
+  const raw = String(value ?? '').trim();
+  if (!raw || raw === '-' || raw === '–') return null;
+  const asNumber = Number(raw.replace(',', '.'));
+  return Number.isFinite(asNumber) ? asNumber : null;
+}
+
 function isTeamGame(game: SpielplanGame, team: string): boolean {
   const target = normalizeTeamName(team);
   return normalizeTeamName(game.team_home) === target || normalizeTeamName(game.team_away) === target;
@@ -146,6 +159,9 @@ function TournamentsPageContent() {
   const [gameNotes, setGameNotes] = useState<Record<string, string>>({});
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [isSubscribedForTeam, setIsSubscribedForTeam] = useState(false);
+  const [livePollingMinutes, setLivePollingMinutes] = useState<5 | 10>(5);
+  const [lastLiveSync, setLastLiveSync] = useState<Date | null>(null);
+  const [activeSubscribedGameIds, setActiveSubscribedGameIds] = useState<string[]>([]);
 
   const appliedQueryTeamRef = useRef(false);
   const notifiedKeysRef = useRef<Set<string>>(new Set());
@@ -247,6 +263,38 @@ function TournamentsPageContent() {
 
     fetchData();
   }, [apiService, selectedSeason, selectedLeague]);
+
+  useEffect(() => {
+    if (!selectedSeason || !selectedLeague) return;
+    if (isSubscribedForTeam && selectedTeam) return;
+    let cancelled = false;
+
+    const refreshPlan = async () => {
+      try {
+        const [planData, spieltagData] = await Promise.all([
+          apiService.getSpielplan(selectedSeason, selectedLeague),
+          apiService.getSpieltage(selectedSeason, selectedLeague),
+        ]);
+        if (cancelled) return;
+        setSpiele(planData as SpielplanGame[]);
+        const map: Record<string, string> = {};
+        (spieltagData as SpieltagOption[]).forEach((entry) => {
+          map[entry.label] = entry.id;
+        });
+        setSpieltagMap(map);
+        setLastLiveSync(new Date());
+        setError(null);
+      } catch (err) {
+        console.error('Error refreshing live schedule:', err);
+      }
+    };
+
+    const interval = window.setInterval(refreshPlan, livePollingMinutes * 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [apiService, isSubscribedForTeam, livePollingMinutes, selectedLeague, selectedSeason, selectedTeam]);
 
   useEffect(() => {
     if (appliedQueryTeamRef.current || spiele.length === 0) return;
@@ -375,6 +423,7 @@ function TournamentsPageContent() {
   useEffect(() => {
     if (!selectedSeason || !selectedLeague || !selectedTeam) {
       setIsSubscribedForTeam(false);
+      setActiveSubscribedGameIds([]);
       return;
     }
     if (typeof window === 'undefined') return;
@@ -383,97 +432,96 @@ function TournamentsPageContent() {
     const raw = window.localStorage.getItem('kegel:teamSubscriptions');
     const subscriptions = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
     setIsSubscribedForTeam(Boolean(subscriptions[key]));
+
+    const activeRaw = window.localStorage.getItem('kegel:teamActiveGameIds');
+    const activeMap = activeRaw ? (JSON.parse(activeRaw) as Record<string, string[]>) : {};
+    setActiveSubscribedGameIds(Array.isArray(activeMap[key]) ? activeMap[key] : []);
   }, [selectedSeason, selectedLeague, selectedTeam]);
 
   useEffect(() => {
     if (!isSubscribedForTeam || notificationPermission !== 'granted') return;
     if (!selectedSeason || !selectedLeague || !selectedTeam) return;
+    if (typeof window === 'undefined') return;
 
     let cancelled = false;
 
-    const checkTodayGames = async () => {
+    const checkLiveSubscribedGames = async () => {
       const now = new Date();
       const currentDateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-
-      const todaysGames = sortedTeamGames.filter((game) => {
+      const subscriptionKey = `${selectedSeason}:${selectedLeague}:${selectedTeam}`;
+      const activeGames = sortedTeamGames.filter((game) => {
         const date = parseGameDate(game.date_time);
-        return date ? isSameCalendarDay(date, now) : false;
+        if (!date) return false;
+        const liveWindowEnd = new Date(date.getTime() + 4 * 60 * 60 * 1000);
+        return now >= date && now <= liveWindowEnd;
       });
+      const activeIds = activeGames.map((game) => String(game.game_id));
+      setActiveSubscribedGameIds(activeIds);
 
-      // Requirement: only update/check for notification details when game exists today.
-      if (todaysGames.length === 0) return;
+      const activeRaw = window.localStorage.getItem('kegel:teamActiveGameIds');
+      const activeMap = activeRaw ? (JSON.parse(activeRaw) as Record<string, string[]>) : {};
+      activeMap[subscriptionKey] = activeIds;
+      window.localStorage.setItem('kegel:teamActiveGameIds', JSON.stringify(activeMap));
+
+      // Only fetch when a subscribed game is actually live.
+      if (activeGames.length === 0) return;
 
       try {
-        const latestPlan = (await apiService.getSpielplan(selectedSeason, selectedLeague)) as SpielplanGame[];
         if (cancelled) return;
-        setSpiele(latestPlan);
+        setLastLiveSync(now);
 
-        const latestTeamGames = latestPlan
-          .filter((game) => isTeamGame(game, selectedTeam))
-          .filter((game) => {
-            const date = parseGameDate(game.date_time);
-            return date ? isSameCalendarDay(date, now) : false;
-          })
-          .sort((a, b) => {
-            const aDate = parseGameDate(a.date_time)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-            const bDate = parseGameDate(b.date_time)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-            return aDate - bDate;
-          });
-
-        const nextGameToday = latestTeamGames.find((game) => {
-          const date = parseGameDate(game.date_time);
-          return date ? date.getTime() >= now.getTime() : false;
-        });
-
-        if (nextGameToday) {
-          const nextKey = `next:${currentDateKey}:${nextGameToday.game_id}`;
-          if (!notifiedKeysRef.current.has(nextKey)) {
-            notifyIfAllowed(
-              `${selectedTeam}: naechstes Spiel heute`,
-              `${nextGameToday.date_time} - ${nextGameToday.team_home} vs ${nextGameToday.team_away}`,
-              nextKey
-            );
-            notifiedKeysRef.current.add(nextKey);
-          }
-        }
-
-        latestTeamGames.forEach((game) => {
-          const gameDate = parseGameDate(game.date_time);
-          if (!gameDate) return;
-
-          const liveWindowEnd = new Date(gameDate.getTime() + 4 * 60 * 60 * 1000);
-          const startKey = `start:${currentDateKey}:${game.game_id}`;
-          if (now >= gameDate && now <= liveWindowEnd && !notifiedKeysRef.current.has(startKey)) {
-            notifyIfAllowed(
-              `${selectedTeam}: Spiel laeuft`,
-              `${game.team_home} vs ${game.team_away} hat begonnen.`,
-              startKey
-            );
-            notifiedKeysRef.current.add(startKey);
-          }
-
-          const normalizedResult = String(game.result || '').trim();
-          const previousResult = String(knownResultsRef.current[game.game_id] || '').trim();
-          if (previousResult && normalizedResult && normalizedResult !== previousResult) {
-            const updateKey = `update:${currentDateKey}:${game.game_id}:${normalizedResult}`;
-            if (!notifiedKeysRef.current.has(updateKey)) {
+        await Promise.all(
+          activeGames.map(async (game) => {
+            const startKey = `start:${currentDateKey}:${game.game_id}`;
+            if (!notifiedKeysRef.current.has(startKey)) {
               notifyIfAllowed(
-                `${selectedTeam}: Live-Update`,
-                `${game.team_home} vs ${game.team_away} - ${normalizedResult}`,
-                updateKey
+                `${selectedTeam}: Spiel laeuft`,
+                `${game.team_home} vs ${game.team_away} hat begonnen.`,
+                startKey
               );
-              notifiedKeysRef.current.add(updateKey);
+              notifiedKeysRef.current.add(startKey);
             }
-          }
-          knownResultsRef.current[game.game_id] = normalizedResult;
-        });
+
+            const rows = (await apiService.getSpielerInfo(selectedSeason, game.game_id, 1)) as GameDetailRow[];
+            if (cancelled) return;
+            setGameDetails((prev) => ({ ...prev, [game.game_id]: rows }));
+
+            const totalsRow = rows.find((row) => row?.[0] === '' && row?.[15] === '' && row?.[5] && row?.[10]);
+            const leftKegel = totalsRow ? parseCellNumber(totalsRow[5]) : null;
+            const rightKegel = totalsRow ? parseCellNumber(totalsRow[10]) : null;
+            if (leftKegel === null || rightKegel === null) return;
+
+            const leadLabel =
+              leftKegel > rightKegel
+                ? `${game.team_home} fuehrt`
+                : rightKegel > leftKegel
+                  ? `${game.team_away} fuehrt`
+                  : 'Gleichstand';
+            const leadDiff = Math.abs(leftKegel - rightKegel);
+            const leadState = `${leftKegel}:${rightKegel}`;
+
+            const previousState = String(knownResultsRef.current[game.game_id] || '').trim();
+            if (previousState && previousState !== leadState) {
+              const updateKey = `update:${currentDateKey}:${game.game_id}:${leadState}`;
+              if (!notifiedKeysRef.current.has(updateKey)) {
+                notifyIfAllowed(
+                  `${selectedTeam}: Live-Update`,
+                  `${leadLabel} (${leadDiff}) - ${leftKegel}:${rightKegel}`,
+                  updateKey
+                );
+                notifiedKeysRef.current.add(updateKey);
+              }
+            }
+            knownResultsRef.current[game.game_id] = leadState;
+          })
+        );
       } catch (err) {
         console.error('Error while checking live team updates:', err);
       }
     };
 
-    checkTodayGames();
-    const interval = window.setInterval(checkTodayGames, 60_000);
+    checkLiveSubscribedGames();
+    const interval = window.setInterval(checkLiveSubscribedGames, livePollingMinutes * 60_000);
 
     return () => {
       cancelled = true;
@@ -484,6 +532,7 @@ function TournamentsPageContent() {
     isSubscribedForTeam,
     notificationPermission,
     selectedLeague,
+    livePollingMinutes,
     selectedSeason,
     selectedTeam,
     sortedTeamGames,
@@ -541,6 +590,13 @@ function TournamentsPageContent() {
     const nextValue = !Boolean(subscriptions[key]);
     subscriptions[key] = nextValue;
     window.localStorage.setItem('kegel:teamSubscriptions', JSON.stringify(subscriptions));
+    if (!nextValue) {
+      const activeRaw = window.localStorage.getItem('kegel:teamActiveGameIds');
+      const activeMap = activeRaw ? (JSON.parse(activeRaw) as Record<string, string[]>) : {};
+      delete activeMap[key];
+      window.localStorage.setItem('kegel:teamActiveGameIds', JSON.stringify(activeMap));
+      setActiveSubscribedGameIds([]);
+    }
     setIsSubscribedForTeam(nextValue);
   };
 
@@ -980,6 +1036,21 @@ function TournamentsPageContent() {
                 ))}
               </select>
             </div>
+
+            <div className="flex flex-col">
+              <label htmlFor="livePollFilter" className="text-sm font-medium text-foreground mb-1">
+                Live-Refresh
+              </label>
+              <select
+                id="livePollFilter"
+                value={String(livePollingMinutes)}
+                onChange={(e) => setLivePollingMinutes(Number(e.target.value) === 10 ? 10 : 5)}
+                className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="5">Alle 5 Minuten</option>
+                <option value="10">Alle 10 Minuten</option>
+              </select>
+            </div>
           </div>
 
           {selectedTeam && (
@@ -994,6 +1065,20 @@ function TournamentsPageContent() {
                 <div className="rounded-md border border-border px-2 py-1 text-xs">
                   Offen: <span className="font-semibold">{upcomingGames.length}</span>
                 </div>
+                <div className="rounded-md border border-border px-2 py-1 text-xs">
+                  Letztes Live-Update:{' '}
+                  <span className="font-semibold">
+                    {lastLiveSync ? lastLiveSync.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                  </span>
+                </div>
+                {isSubscribedForTeam && (
+                  <div className="rounded-md border border-border px-2 py-1 text-xs">
+                    Live-Spiel-IDs:{' '}
+                    <span className="font-semibold">
+                      {activeSubscribedGameIds.length > 0 ? activeSubscribedGameIds.join(', ') : '-'}
+                    </span>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={toggleSubscription}
@@ -1046,6 +1131,15 @@ function TournamentsPageContent() {
                       <tbody>
                         {rows.map((spiel, idx) => {
                           const isOpen = openGameId === spiel.game_id;
+                          const score = parseResultScore(spiel.result);
+                          const pointDiff = score ? Math.abs(score.home - score.away) : null;
+                          const leader = score
+                            ? score.home > score.away
+                              ? 'Heim führt'
+                              : score.away > score.home
+                                ? 'Gast führt'
+                                : 'Gleichstand'
+                            : null;
                           return (
                             <React.Fragment key={`${spiel.game_id}-${idx}`}>
                               <tr
@@ -1055,7 +1149,15 @@ function TournamentsPageContent() {
                                 <td className="py-3 px-4 whitespace-nowrap">{displayValue(spiel.date_time)}</td>
                                 <td className="py-3 px-4 min-w-[10rem]">{displayValue(spiel.team_home)}</td>
                                 <td className="py-3 px-4 min-w-[10rem]">{displayValue(spiel.team_away)}</td>
-                                <td className="py-3 px-4 whitespace-nowrap">{displayValue(spiel.result)}</td>
+                                <td className="py-3 px-4 whitespace-nowrap">
+                                  <div>{displayValue(spiel.result)}</div>
+                                  {leader && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {leader}
+                                      {pointDiff !== null ? ` (${pointDiff})` : ''}
+                                    </div>
+                                  )}
+                                </td>
                               </tr>
                               {isOpen && (
                                 <tr key={`${spiel.game_id}-details`}>
@@ -1106,7 +1208,7 @@ function TournamentsPageContent() {
 
         {!loading && !error && filteredGames.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-lg text-muted-foreground">No tournament games found</p>
+            <p className="text-lg text-muted-foreground">Keine Turnier-Spiele gefunden</p>
           </div>
         )}
       </main>
