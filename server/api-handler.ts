@@ -250,25 +250,33 @@ class APIHandler {
         if (v !== undefined && v !== null && v !== "") body.append(k, String(v));
       });
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.SPORTWINNER_TIMEOUT_MS);
-      const res = await fetch(this.SPORTWINNER_API_URL, {
-        method: "POST",
-        headers: {
-          Referer: this.SPORTWINNER_REFERER,
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-        },
-        body: body.toString(),
-        signal: controller.signal
-      }).finally(() => clearTimeout(timeout));
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), this.SPORTWINNER_TIMEOUT_MS);
+        const res = await fetch(this.SPORTWINNER_API_URL, {
+          method: "POST",
+          headers: {
+            Referer: this.SPORTWINNER_REFERER,
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+          },
+          body: body.toString(),
+          signal: controller.signal
+        }).finally(() => clearTimeout(timeout));
 
-      if (!res.ok) {
-        const upstreamError = new Error(`HTTP error ${res.status}`) as Error & { status?: number };
-        upstreamError.status = res.status;
-        throw upstreamError;
+        if (!res.ok) {
+          console.warn(`Sportwinner upstream non-ok for ${cmd}: ${res.status}`);
+          return [];
+        }
+
+        const json = await res.json();
+        return Array.isArray(json) ? json : [];
+      } catch (error) {
+        if (this.isTimeoutLikeError(error)) {
+          APIHandler.commandCooldownUntil.set(cmd, Date.now() + APIHandler.COMMAND_COOLDOWN_MS);
+        }
+        console.warn(`Sportwinner fetch failed for ${cmd}:`, error);
+        return [];
       }
-
-      return res.json();
     };
 
     // Create a cache key based on the command and params
@@ -307,7 +315,9 @@ class APIHandler {
         if (Array.isArray(result)) {
           APIHandler.lastGoodByCacheKey.set(cacheKey, { data: result, at: Date.now() });
         }
-        APIHandler.commandCooldownUntil.delete(command);
+        if (Array.isArray(result) && result.length > 0) {
+          APIHandler.commandCooldownUntil.delete(command);
+        }
         return Array.isArray(result) ? result : [];
       } catch (error) {
         if (this.isTimeoutLikeError(error)) {

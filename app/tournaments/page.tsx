@@ -70,23 +70,9 @@ function parseResultScore(value: string): { home: number; away: number } | null 
   return { home: Number(match[1]), away: Number(match[2]) };
 }
 
-function parseCellNumber(value: GameDetailCell): number | null {
-  const raw = String(value ?? '').trim();
-  if (!raw || raw === '-' || raw === '–') return null;
-  const asNumber = Number(raw.replace(',', '.'));
-  return Number.isFinite(asNumber) ? asNumber : null;
-}
-
 function isTeamGame(game: SpielplanGame, team: string): boolean {
   const target = normalizeTeamName(team);
   return normalizeTeamName(game.team_home) === target || normalizeTeamName(game.team_away) === target;
-}
-
-function notifyIfAllowed(title: string, body: string, tag: string) {
-  if (typeof window === 'undefined') return;
-  if (!('Notification' in window)) return;
-  if (Notification.permission !== 'granted') return;
-  new Notification(title, { body, tag });
 }
 
 function roundedRectPath(
@@ -118,17 +104,6 @@ function extractDateOnly(value: string): string {
   return dateMatch ? dateMatch[0].trim() : text.replace(/\s*[-|]?\s*\d{1,2}:\d{2}.*$/, '').trim();
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
-}
-
 function TournamentsPageContent() {
   const apiService = ApiService.getInstance();
   const searchParams = useSearchParams();
@@ -145,21 +120,10 @@ function TournamentsPageContent() {
   const [detailsLoading, setDetailsLoading] = useState<Record<string, boolean>>({});
   const [spieltagMap, setSpieltagMap] = useState<Record<string, string>>({});
   const [gameNotes, setGameNotes] = useState<Record<string, string>>({});
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
-  const [isSubscribedForTeam, setIsSubscribedForTeam] = useState(false);
   const [livePollingMinutes, setLivePollingMinutes] = useState<5 | 10>(5);
   const [lastLiveSync, setLastLiveSync] = useState<Date | null>(null);
-  const [activeSubscribedGameIds, setActiveSubscribedGameIds] = useState<string[]>([]);
 
   const appliedQueryTeamRef = useRef(false);
-  const notifiedKeysRef = useRef<Set<string>>(new Set());
-  const knownResultsRef = useRef<Record<string, string>>({});
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setNotificationPermission(Notification.permission);
-    }
-  }, []);
 
   useEffect(() => {
     const fetchFilters = async () => {
@@ -271,7 +235,6 @@ function TournamentsPageContent() {
 
   useEffect(() => {
     if (!selectedSeason || !selectedLeague) return;
-    if (isSubscribedForTeam && selectedTeam) return;
     let cancelled = false;
 
     const refreshPlan = async () => {
@@ -299,7 +262,7 @@ function TournamentsPageContent() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [apiService, isSubscribedForTeam, livePollingMinutes, selectedLeague, selectedSeason, selectedTeam]);
+  }, [apiService, livePollingMinutes, selectedLeague, selectedSeason]);
 
   useEffect(() => {
     if (appliedQueryTeamRef.current || spiele.length === 0) return;
@@ -343,8 +306,6 @@ function TournamentsPageContent() {
     setOpenGameId(null);
     setError(null);
     appliedQueryTeamRef.current = false;
-    notifiedKeysRef.current.clear();
-    knownResultsRef.current = {};
   };
 
   const teamOptions = useMemo(() => {
@@ -425,147 +386,6 @@ function TournamentsPageContent() {
     return `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
   }, [selectedTeam, sortedTeamGames]);
 
-  useEffect(() => {
-    if (!selectedSeason || !selectedLeague || !selectedTeam) {
-      setIsSubscribedForTeam(false);
-      setActiveSubscribedGameIds([]);
-      return;
-    }
-    if (typeof window === 'undefined') return;
-
-    let cancelled = false;
-    const run = async () => {
-      try {
-        if (!('serviceWorker' in navigator)) return;
-        const registration = await navigator.serviceWorker.register('/sw.js');
-        const subscription = await registration.pushManager.getSubscription();
-        const endpoint = subscription?.endpoint || '';
-        if (!endpoint) {
-          if (!cancelled) {
-            setIsSubscribedForTeam(false);
-            setActiveSubscribedGameIds([]);
-          }
-          return;
-        }
-
-        const qs = new URLSearchParams({
-          season: selectedSeason,
-          league: selectedLeague,
-          team: selectedTeam,
-          endpoint,
-        });
-        const response = await fetch(`/api/notifications/status?${qs.toString()}`, {
-          method: 'GET',
-          cache: 'no-store',
-        });
-        const json = (await response.json()) as { subscribed?: boolean; activeGameIds?: string[] };
-        if (cancelled) return;
-        setIsSubscribedForTeam(Boolean(json.subscribed));
-        setActiveSubscribedGameIds(Array.isArray(json.activeGameIds) ? json.activeGameIds : []);
-      } catch (error) {
-        console.error('Failed to fetch notification status:', error);
-      }
-    };
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedSeason, selectedLeague, selectedTeam]);
-
-  useEffect(() => {
-    if (!isSubscribedForTeam || notificationPermission !== 'granted') return;
-    if (!selectedSeason || !selectedLeague || !selectedTeam) return;
-    if (typeof window === 'undefined') return;
-
-    let cancelled = false;
-
-    const checkLiveSubscribedGames = async () => {
-      const now = new Date();
-      const currentDateKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-      const activeGames = sortedTeamGames.filter((game) => {
-        const date = parseGameDate(game.date_time);
-        if (!date) return false;
-        const liveWindowEnd = new Date(date.getTime() + 4 * 60 * 60 * 1000);
-        return now >= date && now <= liveWindowEnd;
-      });
-      const activeIds = activeGames.map((game) => String(game.game_id));
-      setActiveSubscribedGameIds(activeIds);
-
-      // Only fetch when a subscribed game is actually live.
-      if (activeGames.length === 0) return;
-
-      try {
-        if (cancelled) return;
-        setLastLiveSync(now);
-
-        await Promise.all(
-          activeGames.map(async (game) => {
-            const startKey = `start:${currentDateKey}:${game.game_id}`;
-            if (!notifiedKeysRef.current.has(startKey)) {
-              notifyIfAllowed(
-                `${selectedTeam}: Spiel laeuft`,
-                `${game.team_home} vs ${game.team_away} hat begonnen.`,
-                startKey
-              );
-              notifiedKeysRef.current.add(startKey);
-            }
-
-            const rows = (await apiService.getSpielerInfo(selectedSeason, game.game_id, 1)) as GameDetailRow[];
-            if (cancelled) return;
-            setGameDetails((prev) => ({ ...prev, [game.game_id]: rows }));
-
-            const totalsRow = rows.find((row) => row?.[0] === '' && row?.[15] === '' && row?.[5] && row?.[10]);
-            const leftKegel = totalsRow ? parseCellNumber(totalsRow[5]) : null;
-            const rightKegel = totalsRow ? parseCellNumber(totalsRow[10]) : null;
-            if (leftKegel === null || rightKegel === null) return;
-
-            const leadLabel =
-              leftKegel > rightKegel
-                ? `${game.team_home} fuehrt`
-                : rightKegel > leftKegel
-                  ? `${game.team_away} fuehrt`
-                  : 'Gleichstand';
-            const leadDiff = Math.abs(leftKegel - rightKegel);
-            const leadState = `${leftKegel}:${rightKegel}`;
-
-            const previousState = String(knownResultsRef.current[game.game_id] || '').trim();
-            if (previousState && previousState !== leadState) {
-              const updateKey = `update:${currentDateKey}:${game.game_id}:${leadState}`;
-              if (!notifiedKeysRef.current.has(updateKey)) {
-                notifyIfAllowed(
-                  `${selectedTeam}: Live-Update`,
-                  `${leadLabel} (${leadDiff}) - ${leftKegel}:${rightKegel}`,
-                  updateKey
-                );
-                notifiedKeysRef.current.add(updateKey);
-              }
-            }
-            knownResultsRef.current[game.game_id] = leadState;
-          })
-        );
-      } catch (err) {
-        console.error('Error while checking live team updates:', err);
-      }
-    };
-
-    checkLiveSubscribedGames();
-    const interval = window.setInterval(checkLiveSubscribedGames, livePollingMinutes * 60_000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [
-    apiService,
-    isSubscribedForTeam,
-    notificationPermission,
-    selectedLeague,
-    livePollingMinutes,
-    selectedSeason,
-    selectedTeam,
-    sortedTeamGames,
-  ]);
 
   const fetchGameDetails = async (gameId: string) => {
     if (!selectedSeason) return;
@@ -601,73 +421,6 @@ function TournamentsPageContent() {
     }
   };
 
-  const toggleSubscription = async () => {
-    if (!selectedSeason || !selectedLeague || !selectedTeam) return;
-    if (typeof window === 'undefined') return;
-
-    let permission: NotificationPermission = notificationPermission;
-    if ('Notification' in window && permission !== 'granted') {
-      permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-    }
-
-    if (permission === 'denied') return;
-
-    if (!('serviceWorker' in navigator)) return;
-    const registration = await navigator.serviceWorker.register('/sw.js');
-    let browserSubscription = await registration.pushManager.getSubscription();
-
-    if (!browserSubscription) {
-      const keyResponse = await fetch('/api/notifications/vapid-public-key', { cache: 'no-store' });
-      if (!keyResponse.ok) {
-        console.error('Missing VAPID public key on server');
-        return;
-      }
-      const keyJson = (await keyResponse.json()) as { key?: string };
-      if (!keyJson.key) return;
-      browserSubscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(keyJson.key) as BufferSource,
-      });
-    }
-
-    const endpoint = browserSubscription.endpoint;
-    const subscriptionPayload = browserSubscription.toJSON();
-    const body = {
-      season: selectedSeason,
-      league: selectedLeague,
-      team: selectedTeam,
-      endpoint,
-      subscription: subscriptionPayload,
-    };
-
-    if (isSubscribedForTeam) {
-      const res = await fetch('/api/notifications/unsubscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          season: selectedSeason,
-          league: selectedLeague,
-          team: selectedTeam,
-          endpoint,
-        }),
-      });
-      if (res.ok) {
-        setIsSubscribedForTeam(false);
-        setActiveSubscribedGameIds([]);
-      }
-      return;
-    }
-
-    const res = await fetch('/api/notifications/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      setIsSubscribedForTeam(true);
-    }
-  };
 
   const downloadGameDetailsAsPng = async (game: SpielplanGame, rows: GameDetailRow[], notes?: string) => {
     if (!rows || rows.length === 0) return;
@@ -1140,21 +893,6 @@ function TournamentsPageContent() {
                     {lastLiveSync ? lastLiveSync.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '-'}
                   </span>
                 </div>
-                {isSubscribedForTeam && (
-                  <div className="rounded-md border border-border px-2 py-1 text-xs">
-                    Live-Spiel-IDs:{' '}
-                    <span className="font-semibold">
-                      {activeSubscribedGameIds.length > 0 ? activeSubscribedGameIds.join(', ') : '-'}
-                    </span>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={toggleSubscription}
-                  className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-accent"
-                >
-                  {isSubscribedForTeam ? 'Abo aktiv (Benachrichtigungen)' : 'Team abonnieren'}
-                </button>
                 {teamIcsDataUri && (
                   <a
                     href={teamIcsDataUri}
@@ -1165,11 +903,6 @@ function TournamentsPageContent() {
                   </a>
                 )}
               </div>
-              {notificationPermission === 'denied' && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Browser-Benachrichtigungen sind blockiert. Bitte in den Browser-Einstellungen erlauben.
-                </p>
-              )}
             </div>
           )}
         </div>
