@@ -5,6 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import Menubar from '@/components/menubar';
 import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { parseDateTimeString } from '@/lib/date-parser';
+import { readDefaultLeagueId } from '@/lib/client-settings';
 
 interface SpielplanGame {
   spieltag: string;
@@ -38,24 +40,7 @@ interface SpieltagOption {
 type GameDetailCell = string | number | null | undefined;
 type GameDetailRow = GameDetailCell[];
 
-function parseGameDate(value: string): Date | null {
-  const trimmed = String(value || '').trim();
-  if (!trimmed) return null;
-
-  const dm = trimmed.match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?/);
-  if (dm) {
-    const year = Number(dm[3].length === 2 ? `20${dm[3]}` : dm[3]);
-    const month = Number(dm[2]) - 1;
-    const day = Number(dm[1]);
-    const hour = dm[4] ? Number(dm[4]) : 0;
-    const minute = dm[5] ? Number(dm[5]) : 0;
-    const date = new Date(year, month, day, hour, minute, 0, 0);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-
-  const fallback = new Date(trimmed);
-  return Number.isNaN(fallback.getTime()) ? null : fallback;
-}
+const parseGameDate = parseDateTimeString;
 
 function formatDateForIcs(date: Date): string {
   return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
@@ -71,14 +56,6 @@ function escapeIcsText(value: string): string {
 
 function normalizeTeamName(value: string): string {
   return String(value || '').trim().toLowerCase();
-}
-
-function isSameCalendarDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
 }
 
 function hasPlayedResult(value: string): boolean {
@@ -209,10 +186,22 @@ function TournamentsPageContent() {
   useEffect(() => {
     if (selectedLeague || leagues.length === 0) return;
     const requestedLeague = searchParams.get('league');
+    const defaultLeague = readDefaultLeagueId();
     const isValidRequestedLeague = requestedLeague
       ? leagues.some((league) => String(league.liga_id) === requestedLeague)
       : false;
-    setSelectedLeague(isValidRequestedLeague ? String(requestedLeague) : String(leagues[0].liga_id));
+    const isValidDefaultLeague = defaultLeague
+      ? leagues.some((league) => String(league.liga_id) === defaultLeague)
+      : false;
+    if (isValidRequestedLeague) {
+      setSelectedLeague(String(requestedLeague));
+      return;
+    }
+    if (isValidDefaultLeague) {
+      setSelectedLeague(defaultLeague);
+      return;
+    }
+    setSelectedLeague(String(leagues[0].liga_id));
   }, [searchParams, leagues, selectedLeague]);
 
   useEffect(() => {
@@ -222,6 +211,7 @@ function TournamentsPageContent() {
         const leagueData = (await apiService.getLeagues(selectedSeason)) as LeagueOption[];
         setLeagues(leagueData);
         const requestedLeague = searchParams.get('league');
+        const defaultLeague = readDefaultLeagueId();
         setSelectedLeague((prev) => {
           if (leagueData.length === 0) return '';
           const previousIsValid = leagueData.some((league) => String(league.liga_id) === String(prev));
@@ -230,6 +220,10 @@ function TournamentsPageContent() {
             ? leagueData.some((league) => String(league.liga_id) === String(requestedLeague))
             : false;
           if (requestedIsValid) return String(requestedLeague);
+          const defaultIsValid = defaultLeague
+            ? leagueData.some((league) => String(league.liga_id) === String(defaultLeague))
+            : false;
+          if (defaultIsValid) return String(defaultLeague);
           return String(leagueData[0].liga_id);
         });
       } catch (err) {

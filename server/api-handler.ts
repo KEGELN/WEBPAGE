@@ -56,12 +56,36 @@ function parseGermanNumber(val: string | number): number {
 }
 
 class APIHandler {
+  private static readonly inFlightByCacheKey = new Map<string, Promise<any[][]>>();
+  private static readonly lastGoodByCacheKey = new Map<string, { data: any[][]; at: number }>();
+  private static readonly commandCooldownUntil = new Map<string, number>();
+  private static readonly COMMAND_COOLDOWN_MS = 60_000;
+
   private readonly SPORTWINNER_API_URL =
     process.env.SPORTWINNER_API_URL ||
     "https://skvb.sportwinner.de/php/skvb/service.php";
 
   private readonly SPORTWINNER_REFERER =
     process.env.SPORTWINNER_REFERER || "https://skvb.sportwinner.de/";
+  private readonly SPORTWINNER_TIMEOUT_MS = Number(process.env.SPORTWINNER_TIMEOUT_MS || 4500);
+
+  private getFallbackData(command: string): any[][] | null {
+    if (command === "GetSaisonArray") {
+      const year = new Date().getFullYear();
+      // Keep UI responsive even when upstream is unreachable.
+      return [["11", String(year), "1"]];
+    }
+    return null;
+  }
+
+  private isTimeoutLikeError(error: unknown): boolean {
+    const e = error as { name?: string; code?: string; cause?: { code?: string } };
+    return (
+      e?.name === "AbortError" ||
+      e?.code === "UND_ERR_CONNECT_TIMEOUT" ||
+      e?.cause?.code === "UND_ERR_CONNECT_TIMEOUT"
+    );
+  }
 
   /* ---------------- SEASONS ---------------- */
 
@@ -226,14 +250,17 @@ class APIHandler {
         if (v !== undefined && v !== null && v !== "") body.append(k, String(v));
       });
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.SPORTWINNER_TIMEOUT_MS);
       const res = await fetch(this.SPORTWINNER_API_URL, {
         method: "POST",
         headers: {
           Referer: this.SPORTWINNER_REFERER,
           "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
         },
-        body: body.toString()
-      });
+        body: body.toString(),
+        signal: controller.signal
+      }).finally(() => clearTimeout(timeout));
 
       if (!res.ok) {
         const upstreamError = new Error(`HTTP error ${res.status}`) as Error & { status?: number };
@@ -252,6 +279,19 @@ class APIHandler {
     }, {} as Record<string, any>);
 
     const cacheKey = `sportwinner-${command}-${JSON.stringify(sortedParams)}`;
+    const now = Date.now();
+    const cooldownUntil = APIHandler.commandCooldownUntil.get(command) || 0;
+
+    if (cooldownUntil > now) {
+      const stale = APIHandler.lastGoodByCacheKey.get(cacheKey)?.data;
+      if (stale) return stale;
+      const fallback = this.getFallbackData(command);
+      if (fallback) return fallback;
+      return [];
+    }
+
+    const inFlight = APIHandler.inFlightByCacheKey.get(cacheKey);
+    if (inFlight) return inFlight;
 
     // Use unstable_cache to cache the result
     // Revalidating every 3600 seconds (1 hour) as requested
@@ -261,7 +301,30 @@ class APIHandler {
       { revalidate: 3600, tags: ['sportwinner'] }
     );
 
-    return getCachedResult();
+    const promise = (async () => {
+      try {
+        const result = (await getCachedResult()) as any[][];
+        if (Array.isArray(result)) {
+          APIHandler.lastGoodByCacheKey.set(cacheKey, { data: result, at: Date.now() });
+        }
+        APIHandler.commandCooldownUntil.delete(command);
+        return Array.isArray(result) ? result : [];
+      } catch (error) {
+        if (this.isTimeoutLikeError(error)) {
+          APIHandler.commandCooldownUntil.set(command, Date.now() + APIHandler.COMMAND_COOLDOWN_MS);
+        }
+        const stale = APIHandler.lastGoodByCacheKey.get(cacheKey)?.data;
+        if (stale) return stale;
+        const fallback = this.getFallbackData(command);
+        if (fallback) return fallback;
+        return [];
+      } finally {
+        APIHandler.inFlightByCacheKey.delete(cacheKey);
+      }
+    })();
+
+    APIHandler.inFlightByCacheKey.set(cacheKey, promise);
+    return promise;
   }
 }
 

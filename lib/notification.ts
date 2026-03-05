@@ -1,4 +1,5 @@
 import APIHandler from '@/server/api-handler';
+import { parseDateTimeString } from '@/lib/date-parser';
 
 export interface PushSubscriptionInput {
   endpoint: string;
@@ -47,22 +48,7 @@ function normalizeTeam(value: string): string {
   return String(value || '').trim().toLowerCase();
 }
 
-function parseGameDate(value: string): Date | null {
-  const trimmed = String(value || '').trim();
-  if (!trimmed) return null;
-  const dm = trimmed.match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?/);
-  if (dm) {
-    const year = Number(dm[3].length === 2 ? `20${dm[3]}` : dm[3]);
-    const month = Number(dm[2]) - 1;
-    const day = Number(dm[1]);
-    const hour = dm[4] ? Number(dm[4]) : 0;
-    const minute = dm[5] ? Number(dm[5]) : 0;
-    const date = new Date(year, month, day, hour, minute, 0, 0);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-  const fallback = new Date(trimmed);
-  return Number.isNaN(fallback.getTime()) ? null : fallback;
-}
+const parseGameDate = parseDateTimeString;
 
 function parseCellNumber(value: string | number | null | undefined): number | null {
   const raw = String(value ?? '').trim();
@@ -97,6 +83,29 @@ async function readJsonStore(): Promise<StoreShape> {
   } catch {
     return DEFAULT_STORE;
   }
+}
+
+export async function getNotificationDebugData(): Promise<{
+  subscriptions: NotificationSubscriptionRecord[];
+  activeGameIds: Record<string, string[]>;
+  gameStates: Record<string, string>;
+  counts: {
+    subscriptions: number;
+    identitiesWithActiveGames: number;
+    trackedGameStates: number;
+  };
+}> {
+  const store = await readJsonStore();
+  return {
+    subscriptions: store.subscriptions,
+    activeGameIds: store.activeGameIds,
+    gameStates: store.gameStates,
+    counts: {
+      subscriptions: store.subscriptions.length,
+      identitiesWithActiveGames: Object.keys(store.activeGameIds).length,
+      trackedGameStates: Object.keys(store.gameStates).length,
+    },
+  };
 }
 
 async function writeJsonStore(value: StoreShape): Promise<void> {

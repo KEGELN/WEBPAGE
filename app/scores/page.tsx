@@ -6,6 +6,7 @@ import Menubar from '@/components/menubar';
 import PlayerService from '@/lib/player-service';
 import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { readDefaultLeagueId } from '@/lib/client-settings';
 
 export default function ScoresPage() {
   const router = useRouter();
@@ -49,7 +50,11 @@ export default function ScoresPage() {
 
   useEffect(() => {
     if (!selectedLeague && leagues.length > 0) {
-      setSelectedLeague(leagues[0].liga_id);
+      const defaultLeague = readDefaultLeagueId();
+      const defaultLeagueExists = defaultLeague
+        ? leagues.some((league) => String(league.liga_id) === defaultLeague)
+        : false;
+      setSelectedLeague(defaultLeagueExists ? defaultLeague : leagues[0].liga_id);
     }
   }, [leagues, selectedLeague]);
 
@@ -59,10 +64,16 @@ export default function ScoresPage() {
       try {
         const leagueData = await apiService.getLeagues(selectedSeason);
         setLeagues(leagueData);
+        const defaultLeague = readDefaultLeagueId();
         setSelectedLeague((prev) => {
           if (leagueData.length === 0) return '';
           const hasPrevious = leagueData.some((league) => String(league.liga_id) === String(prev));
-          return hasPrevious ? prev : String(leagueData[0].liga_id);
+          if (hasPrevious) return prev;
+          const hasDefault = defaultLeague
+            ? leagueData.some((league) => String(league.liga_id) === String(defaultLeague))
+            : false;
+          if (hasDefault) return String(defaultLeague);
+          return String(leagueData[0].liga_id);
         });
       } catch (err) {
         console.error('Error fetching leagues for season:', err);

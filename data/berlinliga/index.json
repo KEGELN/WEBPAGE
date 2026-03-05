@@ -80,6 +80,14 @@
       "csv_file": "BlnL_2526-Nach-07.csv",
       "spieltag": "7",
       "row_count": 46
+    },
+    {
+      "id": "BlnL_2526-09.pdf",
+      "title": "BlnL_2526-09.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2026/03/BlnL_2526-09.pdf",
+      "csv_file": "BlnL_2526-09.csv",
+      "spieltag": "9",
+      "row_count": 46
     }
   ]
 }
