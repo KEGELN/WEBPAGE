@@ -1,9 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/notifications/poll-live",
-      "schedule": "*/5 * * * *"
-    }
-  ]
-}
-
+{}
