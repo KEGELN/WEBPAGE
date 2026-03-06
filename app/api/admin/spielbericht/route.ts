@@ -22,17 +22,28 @@ type TeamPlayerLine = {
   fehl: number;
 };
 
+type DuelLine = {
+  homePlayer: string;
+  awayPlayer: string;
+  homeKegel: number;
+  awayKegel: number;
+  homeSp: number;
+  awaySp: number;
+  homeMp: number;
+  awayMp: number;
+};
+
 const DEFAULT_MEMORIAL_TEXT =
   'Wir gedenken an Jürgen Tippmann, der am 19.02.2026 von uns gegangen ist. Ruhe in Frieden.';
 
 const DEFAULT_STYLE_SAMPLE = `
 Auswärts weiterhin ungeschlagen – Bären bezwingen Tauer in hart umkämpftem Spiel
 
-Bevor wir mit dem Spielbericht beginnen: Wir gedenken an Jürgen Tippmann, der am 19.2.26 von uns gegangen ist. Jürgen war mehr als 20 Jahre Mitglied beim KSC-RW-Berliner Bär und hat in seiner aktiven Zeit das Kegeln geliebt und gelebt.
+Bevor wir mit dem Spielbericht beginnen: Wir gedenken an Jürgen Tippmann, der am 19.2.26 von uns gegangen ist. Jürgen war mehr als 20 Jahre Mitglied beim KSC-RW-Berliner Bär und hat in seiner aktiven Zeit das Kegeln geliebt und gelebt. Durch ihn schlug auch unser Tippi seine Wurzeln bei den Bären und trägt den sportlichen Erfolg weiter.
 
-Nun zum Spiel: Erzähle den Verlauf mit Startpaar, Mittelpaar und Schlusspaar, arbeite mit konkreten Zahlen aus den Daten und beschreibe Wendepunkte mit Emotion, aber ohne Fakten zu erfinden.
+Nun zum Spiel am letzten Sonntag. Erzähle den Spielverlauf als dramatische Geschichte über Startpaar, Mittelpaar und Schlusspaar. Nutze konkrete Duelle, Zwischenstände, Wendepunkte und starke Schlussbilder.
 
-Abschluss: Tabellenlage, verbleibende Spiele, kurzer Ausblick und passende Hashtags.
+Die Sprache soll emotional, lebendig und vereinsnah sein, mit klaren Zahlen und ohne erfundene Details. Abschluss mit Tabellenlage, Ausblick und Hashtags.
 `.trim();
 
 function normalizeText(value: string): string {
@@ -67,6 +78,16 @@ function isUnplayedResult(result: string): boolean {
 
 function toPromptJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+function sanitizeReportText(value: string): string {
+  return String(value || '')
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/`{1,3}/g, '')
+    .replace(/\r/g, '')
+    .trim();
 }
 
 function parseWertung0Rows(rows: RawRow[]) {
@@ -117,6 +138,44 @@ function parseWertung0Rows(rows: RawRow[]) {
   }
 
   return { homePlayers, awayPlayers, homeTotals, awayTotals };
+}
+
+function parseWertung1Rows(rows: RawRow[]) {
+  const duels: DuelLine[] = [];
+  let teamTotals: DuelLine | null = null;
+
+  for (const row of rows) {
+    const isTotalsRow = String(row?.[0] ?? '').trim() === '' && String(row?.[15] ?? '').trim() === '' && row?.[5] && row?.[10];
+    if (isTotalsRow) {
+      teamTotals = {
+        homePlayer: 'Gesamt',
+        awayPlayer: 'Gesamt',
+        homeKegel: parseNumber(row?.[5]),
+        awayKegel: parseNumber(row?.[10]),
+        homeSp: parseNumber(row?.[6]),
+        awaySp: parseNumber(row?.[9]),
+        homeMp: parseNumber(row?.[7]),
+        awayMp: parseNumber(row?.[8]),
+      };
+      continue;
+    }
+
+    const homePlayer = String(row?.[0] ?? '').trim();
+    const awayPlayer = String(row?.[15] ?? '').trim();
+    if (!homePlayer || !awayPlayer) continue;
+    duels.push({
+      homePlayer,
+      awayPlayer,
+      homeKegel: parseNumber(row?.[5]),
+      awayKegel: parseNumber(row?.[10]),
+      homeSp: parseNumber(row?.[6]),
+      awaySp: parseNumber(row?.[9]),
+      homeMp: parseNumber(row?.[7]),
+      awayMp: parseNumber(row?.[8]),
+    });
+  }
+
+  return { duels, teamTotals };
 }
 
 function parseTablePosition(tableRows: RawRow[], teamName: string) {
@@ -248,6 +307,7 @@ async function generateWithGrok(systemPrompt: string, userPrompt: string): Promi
     body: JSON.stringify({
       model,
       temperature: 0.45,
+      max_tokens: 2600,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -300,6 +360,7 @@ export async function POST(request: NextRequest) {
     ])) as [RawRow[], RawRow[], RawRow[], RawRow[]];
 
     const stats = parseWertung0Rows(wertung0Rows);
+    const matchFacts = parseWertung1Rows(wertung1Rows);
     const score = parseScore(game.result);
     const ownSide: 'home' | 'away' = score && score.away > score.home ? 'away' : 'home';
     const ownTeam = ownSide === 'home' ? game.teamHome : game.teamAway;
@@ -323,6 +384,7 @@ export async function POST(request: NextRequest) {
       ownTable,
       gamesLeft,
       stats,
+      matchFacts,
       raw: {
         wertung1Rows,
         wertung0Rows,
@@ -333,8 +395,11 @@ export async function POST(request: NextRequest) {
     const systemPrompt = [
       'Du bist ein Redakteur für Kegel-Spielberichte.',
       'Schreibe auf Deutsch im emotionalen Vereinsstil mit klarer Dramaturgie.',
-      'Format: Titel, Gedenkabsatz, Spielverlauf (Startpaar/Mittelpaar/Schlusspaar), Tabellenlage & Ausblick, Hashtags.',
+      'Format (ohne Markdown): Titelzeile, Gedenkabsatz, Startpaar, Mittelpaar, Schlusspaar, Tabellenlage & Ausblick, Hashtags.',
       'Nutze konsequent konkrete Zahlen aus den gelieferten Daten (Ergebnis, Kegel, Volle, Abräumen, Fehlwürfe, Tabellenkontext, Restspiele).',
+      'Der Bericht muss ausführlich und detailliert sein (mindestens 900 Wörter).',
+      'Nutze die Strukturdaten in "matchFacts" und "stats" als primäre Faktenquelle.',
+      'KEIN Markdown: keine ###, keine **, keine Listenmarker.',
       'Keine erfundenen Fakten. Wenn etwas fehlt, klar als fehlend benennen.',
       'Halte dich eng am Stilbeispiel.',
     ].join(' ');
@@ -352,10 +417,13 @@ export async function POST(request: NextRequest) {
     let reportText: string;
     try {
       const aiText = await generateWithGrok(systemPrompt, userPrompt);
-      reportText = aiText || (await buildReportLocally(payload));
+      reportText = sanitizeReportText(aiText || '');
+      if (!reportText) {
+        reportText = sanitizeReportText(await buildReportLocally(payload));
+      }
     } catch (aiError) {
       console.warn('Grok generation failed, using local fallback:', aiError);
-      reportText = await buildReportLocally(payload);
+      reportText = sanitizeReportText(await buildReportLocally(payload));
     }
 
     return Response.json({
