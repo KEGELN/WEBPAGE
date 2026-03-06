@@ -48,9 +48,14 @@ interface PlayerSeasonAggregate {
   totalMp: number;
   totalSp: number;
   bestKegel: number;
+  statGames: number;
+  totalVolle: number;
+  totalAbr: number;
+  totalFehl: number;
 }
 
 interface PlayerGameStat {
+  gameId: string;
   seasonId: string;
   seasonLabel: string;
   leagueName: string;
@@ -62,15 +67,22 @@ interface PlayerGameStat {
   kegel: number;
   mp: number;
   sp: number;
+  volle: number;
+  abraeumen: number;
+  fehl: number;
 }
 
 interface PlayerAggregate {
   name: string;
   games: number;
+  statGames: number;
   totalKegel: number;
   bestKegel: number;
   totalMp: number;
   totalSp: number;
+  totalVolle: number;
+  totalAbr: number;
+  totalFehl: number;
   seasons: PlayerSeasonAggregate[];
   gameStats: PlayerGameStat[];
 }
@@ -287,6 +299,24 @@ function downloadCanvas(canvas: HTMLCanvasElement, filename: string) {
   link.click();
 }
 
+function toCsvCell(value: unknown): string {
+  const raw = String(value ?? '');
+  const escaped = raw.replaceAll('"', '""');
+  return `"${escaped}"`;
+}
+
+function downloadCsv(filename: string, headers: string[], rows: Array<Array<unknown>>) {
+  const lines = [headers.map(toCsvCell).join(';'), ...rows.map((row) => row.map(toCsvCell).join(';'))];
+  const csv = `\ufeff${lines.join('\n')}`;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 async function fetchGetSpielFallback(seasonId: string, leagueId: string): Promise<SpielplanGame[]> {
   const body = new URLSearchParams({
     command: 'GetSpiel',
@@ -366,6 +396,21 @@ async function mapWithConcurrency<TInput, TOutput>(
   return results;
 }
 
+async function retryAsync<T>(worker: () => Promise<T>, attempts = 3, delayMs = 220): Promise<T> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await worker();
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+      }
+    }
+  }
+  throw lastError;
+}
+
 export default function ClubsPage() {
   const apiService = ApiService.getInstance();
   const MAX_SEASONS_TO_SCAN = 20;
@@ -428,16 +473,58 @@ export default function ClubsPage() {
       let totalLeaguesChecked = 0;
 
       for (const season of seasonSorted) {
-        const leagues = (await apiService.getLeagues(season.season_id)) as League[];
+        const leagueMap = new Map<string, League>();
+        const addLeagueList = (list: League[]) => {
+          list.forEach((league) => {
+            const id = String(league.liga_id || '').trim();
+            if (!id) return;
+            if (!leagueMap.has(id)) {
+              leagueMap.set(id, league);
+            }
+          });
+        };
+
+        // Global league lists for season (both known art variants).
+        const [globalArt2, globalArt1] = (await Promise.all([
+          retryAsync(() => apiService.getLeagues(season.season_id, '0', 2), 3).catch(() => [] as League[]),
+          retryAsync(() => apiService.getLeagues(season.season_id, '0', 1), 3).catch(() => [] as League[]),
+        ])) as [League[], League[]];
+        addLeagueList(globalArt2);
+        addLeagueList(globalArt1);
+
+        // District-specific leagues to ensure we do not miss older/hidden leagues.
+        const districts = (await retryAsync(() => apiService.getDistricts(season.season_id), 3).catch(() => [] as { bezirk_id: string }[])) as {
+          bezirk_id: string;
+        }[];
+        const districtLeagueLists = await mapWithConcurrency(
+          districts,
+          async (district) => {
+            const districtId = String(district?.bezirk_id || '').trim();
+            if (!districtId) return [] as League[];
+            try {
+              const [byDistrictArt2, byDistrictArt1] = (await Promise.all([
+                retryAsync(() => apiService.getLeagues(season.season_id, districtId, 2), 2).catch(() => [] as League[]),
+                retryAsync(() => apiService.getLeagues(season.season_id, districtId, 1), 2).catch(() => [] as League[]),
+              ])) as [League[], League[]];
+              return [...byDistrictArt2, ...byDistrictArt1];
+            } catch {
+              return [] as League[];
+            }
+          },
+          3
+        );
+        districtLeagueLists.forEach((list) => addLeagueList(list));
+
+        const leagues = Array.from(leagueMap.values());
         totalLeaguesChecked += leagues.length;
 
         const seasonPlans = await mapWithConcurrency(
           leagues,
           async (league) => {
             try {
-              let plan = (await apiService.getSpielplan(season.season_id, league.liga_id)) as SpielplanGame[];
+              let plan = (await retryAsync(() => apiService.getSpielplan(season.season_id, league.liga_id), 3)) as SpielplanGame[];
               if (!plan || plan.length === 0) {
-                plan = await fetchGetSpielFallback(season.season_id, league.liga_id);
+                plan = await retryAsync(() => fetchGetSpielFallback(season.season_id, league.liga_id), 3);
               }
               return { league, plan };
             } catch (planError) {
@@ -445,7 +532,7 @@ export default function ClubsPage() {
               return { league, plan: [] as SpielplanGame[] };
             }
           },
-          5
+          3
         );
 
         seasonPlans.forEach(({ league, plan }) => {
@@ -472,6 +559,7 @@ export default function ClubsPage() {
       const seenGameKeys = new Set<string>();
       const playableGames = allGames.filter((entry) => {
         if (!entry.game.game_id || entry.game.game_id === '0') return false;
+        if (!parseScore(entry.game.result)) return false;
         const key = `${entry.seasonId}:${entry.game.game_id}`;
         if (seenGameKeys.has(key)) return false;
         seenGameKeys.add(key);
@@ -484,18 +572,37 @@ export default function ClubsPage() {
           try {
             return {
               gameKey: `${entry.seasonId}:${entry.game.game_id}`,
-              rows: (await apiService.getSpielerInfo(entry.seasonId, entry.game.game_id, 1)) as GameDetailRow[],
+              rows: (await retryAsync(() => apiService.getSpielerInfo(entry.seasonId, entry.game.game_id, 1), 3)) as GameDetailRow[],
             };
           } catch (detailError) {
             console.warn(`Could not load detail rows for game ${entry.game.game_id}`, detailError);
             return { gameKey: `${entry.seasonId}:${entry.game.game_id}`, rows: [] as GameDetailRow[] };
           }
         },
-        5
+        3
       );
 
       detailPayloads.forEach((payload) => {
         detailRowsByGameId.set(payload.gameKey, payload.rows);
+      });
+      const detailStatsByGameId = new Map<string, GameDetailRow[]>();
+      const detailStatsPayloads = await mapWithConcurrency(
+        playableGames,
+        async (entry) => {
+          try {
+            return {
+              gameKey: `${entry.seasonId}:${entry.game.game_id}`,
+              rows: (await retryAsync(() => apiService.getSpielerInfo(entry.seasonId, entry.game.game_id, 0), 3)) as GameDetailRow[],
+            };
+          } catch (detailError) {
+            console.warn(`Could not load stat rows for game ${entry.game.game_id}`, detailError);
+            return { gameKey: `${entry.seasonId}:${entry.game.game_id}`, rows: [] as GameDetailRow[] };
+          }
+        },
+        3
+      );
+      detailStatsPayloads.forEach((payload) => {
+        detailStatsByGameId.set(payload.gameKey, payload.rows);
       });
 
       const seasonMap = new Map<string, SeasonAggregate>();
@@ -504,12 +611,18 @@ export default function ClubsPage() {
         {
           name: string;
           games: number;
+          statGames: number;
           totalKegel: number;
           bestKegel: number;
           totalMp: number;
           totalSp: number;
+          totalVolle: number;
+          totalAbr: number;
+          totalFehl: number;
           seasons: Map<string, PlayerSeasonAggregate>;
           gameStats: PlayerGameStat[];
+          gameStatsIndex: Map<string, number>;
+          statsSeenGames: Set<string>;
         }
       >();
 
@@ -616,12 +729,18 @@ export default function ClubsPage() {
             playerMap.set(playerName, {
               name: playerName,
               games: 0,
+              statGames: 0,
               totalKegel: 0,
               bestKegel: 0,
               totalMp: 0,
               totalSp: 0,
+              totalVolle: 0,
+              totalAbr: 0,
+              totalFehl: 0,
               seasons: new Map<string, PlayerSeasonAggregate>(),
               gameStats: [],
+              gameStatsIndex: new Map<string, number>(),
+              statsSeenGames: new Set<string>(),
             });
           }
 
@@ -641,6 +760,10 @@ export default function ClubsPage() {
               totalMp: 0,
               totalSp: 0,
               bestKegel: 0,
+              statGames: 0,
+              totalVolle: 0,
+              totalAbr: 0,
+              totalFehl: 0,
             });
           }
 
@@ -651,19 +774,103 @@ export default function ClubsPage() {
           playerSeason.totalSp += sp;
           playerSeason.bestKegel = Math.max(playerSeason.bestKegel, kegel);
 
-          playerBucket.gameStats.push({
-            seasonId: entry.seasonId,
-            seasonLabel: entry.seasonLabel,
-            leagueName: entry.leagueName,
-            dateTime: entry.game.date_time,
-            spieltag: entry.game.spieltag,
-            opponent: entry.isHome ? entry.game.team_away : entry.game.team_home,
-            isHome: entry.isHome,
-            result: entry.game.result,
-            kegel,
-            mp,
-            sp,
-          });
+          const gameKey = `${entry.seasonId}:${entry.game.game_id}`;
+          const existingIndex = playerBucket.gameStatsIndex.get(gameKey);
+          if (existingIndex === undefined) {
+            const nextIndex = playerBucket.gameStats.length;
+            playerBucket.gameStats.push({
+              gameId: String(entry.game.game_id || ''),
+              seasonId: entry.seasonId,
+              seasonLabel: entry.seasonLabel,
+              leagueName: entry.leagueName,
+              dateTime: entry.game.date_time,
+              spieltag: entry.game.spieltag,
+              opponent: entry.isHome ? entry.game.team_away : entry.game.team_home,
+              isHome: entry.isHome,
+              result: entry.game.result,
+              kegel,
+              mp,
+              sp,
+              volle: 0,
+              abraeumen: 0,
+              fehl: 0,
+            });
+            playerBucket.gameStatsIndex.set(gameKey, nextIndex);
+          } else {
+            playerBucket.gameStats[existingIndex].kegel = kegel;
+            playerBucket.gameStats[existingIndex].mp = mp;
+            playerBucket.gameStats[existingIndex].sp = sp;
+          }
+        });
+
+        const statRows = detailStatsByGameId.get(`${entry.seasonId}:${entry.game.game_id}`) || [];
+        statRows.forEach((row) => {
+          const isTotalsRow = row?.[1] === '' && row?.[10] === '';
+          if (isTotalsRow) return;
+
+          const playerName = String((entry.isHome ? row[1] : row[10]) ?? '').trim();
+          if (!playerName) return;
+
+          const volle = parseNumericCell(entry.isHome ? row[2] : row[9]) ?? 0;
+          const abr = parseNumericCell(entry.isHome ? row[3] : row[8]) ?? 0;
+          const fehl = parseNumericCell(entry.isHome ? row[4] : row[7]) ?? 0;
+
+          if (!playerMap.has(playerName)) {
+            playerMap.set(playerName, {
+              name: playerName,
+              games: 0,
+              statGames: 0,
+              totalKegel: 0,
+              bestKegel: 0,
+              totalMp: 0,
+              totalSp: 0,
+              totalVolle: 0,
+              totalAbr: 0,
+              totalFehl: 0,
+              seasons: new Map<string, PlayerSeasonAggregate>(),
+              gameStats: [],
+              gameStatsIndex: new Map<string, number>(),
+              statsSeenGames: new Set<string>(),
+            });
+          }
+
+          const playerBucket = playerMap.get(playerName)!;
+          if (!playerBucket.seasons.has(entry.seasonId)) {
+            playerBucket.seasons.set(entry.seasonId, {
+              seasonId: entry.seasonId,
+              seasonLabel: entry.seasonLabel,
+              games: 0,
+              totalKegel: 0,
+              totalMp: 0,
+              totalSp: 0,
+              bestKegel: 0,
+              statGames: 0,
+              totalVolle: 0,
+              totalAbr: 0,
+              totalFehl: 0,
+            });
+          }
+
+          const seasonStats = playerBucket.seasons.get(entry.seasonId)!;
+          const gameKey = `${entry.seasonId}:${entry.game.game_id}`;
+          if (!playerBucket.statsSeenGames.has(gameKey)) {
+            playerBucket.statsSeenGames.add(gameKey);
+            playerBucket.statGames += 1;
+            playerBucket.totalVolle += volle;
+            playerBucket.totalAbr += abr;
+            playerBucket.totalFehl += fehl;
+            seasonStats.statGames += 1;
+            seasonStats.totalVolle += volle;
+            seasonStats.totalAbr += abr;
+            seasonStats.totalFehl += fehl;
+          }
+
+          const statGameIndex = playerBucket.gameStatsIndex.get(gameKey);
+          if (statGameIndex !== undefined) {
+            playerBucket.gameStats[statGameIndex].volle = volle;
+            playerBucket.gameStats[statGameIndex].abraeumen = abr;
+            playerBucket.gameStats[statGameIndex].fehl = fehl;
+          }
         });
       });
 
@@ -671,10 +878,14 @@ export default function ClubsPage() {
         .map((player) => ({
           name: player.name,
           games: player.games,
+          statGames: player.statGames,
           totalKegel: player.totalKegel,
           bestKegel: player.bestKegel,
           totalMp: player.totalMp,
           totalSp: player.totalSp,
+          totalVolle: player.totalVolle,
+          totalAbr: player.totalAbr,
+          totalFehl: player.totalFehl,
           seasons: Array.from(player.seasons.values()).sort((a, b) => toSeasonNumber(b.seasonLabel) - toSeasonNumber(a.seasonLabel)),
           gameStats: [...player.gameStats].sort((a, b) => {
             const seasonDelta = toSeasonNumber(b.seasonLabel) - toSeasonNumber(a.seasonLabel);
@@ -751,6 +962,9 @@ export default function ClubsPage() {
     const allKegel = selectedPlayer.gameStats.map((game) => game.kegel);
     const recentGames = selectedPlayer.gameStats.slice(0, 12).reverse();
     const recentFormGames = selectedPlayer.gameStats.slice(0, 5);
+    const validVolle = selectedPlayer.gameStats.filter((game) => game.volle > 0);
+    const validAbr = selectedPlayer.gameStats.filter((game) => game.abraeumen > 0);
+    const validFehl = selectedPlayer.gameStats.filter((game) => game.fehl >= 0);
 
     const bestHomeGame = [...homeGames].sort((a, b) => b.kegel - a.kegel)[0] || null;
     const bestAwayGame = [...awayGames].sort((a, b) => b.kegel - a.kegel)[0] || null;
@@ -766,6 +980,11 @@ export default function ClubsPage() {
       awayWorst: awayKegel.length > 0 ? Math.min(...awayKegel) : 0,
       homeMpAvg: getAverage(homeGames.map((game) => game.mp)),
       awayMpAvg: getAverage(awayGames.map((game) => game.mp)),
+      volleAvg: getAverage(validVolle.map((game) => game.volle)),
+      abrAvg: getAverage(validAbr.map((game) => game.abraeumen)),
+      fehlAvg: getAverage(validFehl.map((game) => game.fehl)),
+      homeVolleAvg: getAverage(homeGames.map((game) => game.volle)),
+      awayVolleAvg: getAverage(awayGames.map((game) => game.volle)),
       overallStdDev: getStdDev(allKegel),
       recentFormAvg: getAverage(recentFormGames.map((game) => game.kegel)),
       recentGames,
@@ -851,14 +1070,31 @@ export default function ClubsPage() {
   const topPlayerStats = useMemo(() => {
     const top = topPlayers;
     if (top.length === 0) {
-      return { bestAvg: 0, bestSingle: 0, bestTotalKegel: 0, bestMp: 0, bestSp: 0 };
+      return {
+        bestAvg: 0,
+        bestSingle: 0,
+        bestTotalKegel: 0,
+        bestMp: 0,
+        bestSp: 0,
+        bestVolle: 0,
+        bestAbr: 0,
+        bestFehl: Number.POSITIVE_INFINITY,
+      };
     }
+    const avgVolle = top.map((player) => (player.statGames > 0 ? player.totalVolle / player.statGames : 0));
+    const avgAbr = top.map((player) => (player.statGames > 0 ? player.totalAbr / player.statGames : 0));
+    const avgFehl = top
+      .filter((player) => player.statGames > 0)
+      .map((player) => player.totalFehl / player.statGames);
     return {
       bestAvg: Math.max(...top.map((player) => (player.games > 0 ? player.totalKegel / player.games : 0))),
       bestSingle: Math.max(...top.map((player) => player.bestKegel)),
       bestTotalKegel: Math.max(...top.map((player) => player.totalKegel)),
       bestMp: Math.max(...top.map((player) => player.totalMp)),
       bestSp: Math.max(...top.map((player) => player.totalSp)),
+      bestVolle: Math.max(...avgVolle),
+      bestAbr: Math.max(...avgAbr),
+      bestFehl: avgFehl.length > 0 ? Math.min(...avgFehl) : Number.POSITIVE_INFINITY,
     };
   }, [topPlayers]);
 
@@ -1045,12 +1281,93 @@ export default function ClubsPage() {
     downloadCanvas(canvas, `${overview.clubName.replace(/\s+/g, '-').toLowerCase()}-team-report.png`);
   };
 
+  const exportSeasonsCsv = () => {
+    if (!overview) return;
+    const rows = overview.seasons
+      .slice()
+      .sort((a, b) => toSeasonNumber(b.seasonLabel) - toSeasonNumber(a.seasonLabel))
+      .map((season) => [
+        season.seasonLabel,
+        season.games,
+        season.completedGames,
+        season.wins,
+        season.draws,
+        season.losses,
+        season.pointsFor,
+        season.pointsAgainst,
+        season.avgTeamScore.toLocaleString('de-DE', { maximumFractionDigits: 2 }),
+        season.bestTeamScore,
+        season.matchPointsFor,
+        season.matchPointsAgainst,
+        season.setPointsFor,
+        season.setPointsAgainst,
+      ]);
+    downloadCsv('saisondaten.csv', ['Saison', 'Spiele', 'Abgeschlossen', 'Siege', 'Remis', 'Niederlagen', 'Kegel For', 'Kegel Against', 'Schnitt', 'Bestes', 'MP For', 'MP Against', 'SP For', 'SP Against'], rows);
+  };
+
+  const exportPlayersCsv = () => {
+    if (!overview) return;
+    const rows = overview.players.map((player) => [
+      player.name,
+      player.games,
+      formatAverage(player.totalKegel, player.games),
+      player.statGames > 0 ? (player.totalVolle / player.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-',
+      player.statGames > 0 ? (player.totalAbr / player.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-',
+      player.statGames > 0 ? (player.totalFehl / player.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-',
+      player.bestKegel,
+      player.totalKegel,
+      player.totalMp,
+      player.totalSp,
+    ]);
+    downloadCsv('spieler.csv', ['Name', 'Spiele', 'Schnitt', 'Ø Volle', 'Ø Abr.', 'Ø Fehl', 'Bestes', 'Total Kegel', 'Total MP', 'Total SP'], rows);
+  };
+
+  const exportHistoricGamesCsv = () => {
+    if (!overview) return;
+    const rows = filteredHistoricGames.map((entry) => [
+      entry.seasonLabel,
+      entry.leagueName,
+      entry.game.spieltag || '',
+      entry.game.date_time || '',
+      entry.isHome ? 'Heim' : 'Auswärts',
+      entry.game.team_home || '',
+      entry.game.team_away || '',
+      entry.game.result || '',
+      isLostGame(entry) ? 'Niederlage' : 'Kein Loss',
+    ]);
+    downloadCsv('historische_spiele.csv', ['Saison', 'Liga', 'Spieltag', 'Datum', 'Ort', 'Heim', 'Auswärts', 'Ergebnis', 'Status'], rows);
+  };
+
+  const exportSelectedPlayerGamesCsv = () => {
+    if (!selectedPlayer) return;
+    const rows = selectedPlayer.gameStats.map((game) => [
+      game.seasonLabel,
+      game.dateTime || '',
+      game.leagueName || '',
+      game.spieltag || '',
+      game.isHome ? 'Heim' : 'Auswärts',
+      game.opponent || '',
+      game.kegel,
+      game.volle,
+      game.abraeumen,
+      game.fehl,
+      game.mp,
+      game.sp,
+      game.result || '',
+    ]);
+    downloadCsv(
+      `${selectedPlayer.name.replace(/\s+/g, '_').toLowerCase()}_spiele.csv`,
+      ['Saison', 'Datum', 'Liga', 'Spieltag', 'Ort', 'Gegner', 'Kegel', 'Volle', 'Abr.', 'Fehl', 'MP', 'SP', 'Ergebnis'],
+      rows
+    );
+  };
+
   const exportPlayerPdfReport = () => {
     if (!selectedPlayer || !selectedPlayerPerformance) return;
     const seasonRows = selectedPlayer.seasons
       .map(
         (season) =>
-          `<tr><td>${escapeHtml(season.seasonLabel)}</td><td>${season.games}</td><td>${formatAverage(season.totalKegel, season.games)}</td><td>${season.bestKegel}</td><td>${season.totalMp}</td><td>${season.totalSp}</td></tr>`
+          `<tr><td>${escapeHtml(season.seasonLabel)}</td><td>${season.games}</td><td>${formatAverage(season.totalKegel, season.games)}</td><td>${season.statGames > 0 ? (season.totalVolle / season.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-'}</td><td>${season.statGames > 0 ? (season.totalAbr / season.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-'}</td><td>${season.statGames > 0 ? (season.totalFehl / season.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-'}</td><td>${season.bestKegel}</td><td>${season.totalMp}</td><td>${season.totalSp}</td></tr>`
       )
       .join('');
 
@@ -1058,21 +1375,21 @@ export default function ClubsPage() {
       .slice(0, 30)
       .map(
         (game) =>
-          `<tr><td>${escapeHtml(game.seasonLabel)}</td><td>${escapeHtml(game.dateTime || '-')}</td><td>${escapeHtml(game.leagueName || '-')}</td><td>${escapeHtml(game.opponent || '-')}</td><td>${game.isHome ? 'Heim' : 'Auswärts'}</td><td>${game.kegel}</td><td>${game.mp}</td><td>${game.sp}</td><td>${escapeHtml(game.result || '-')}</td></tr>`
+          `<tr><td>${escapeHtml(game.seasonLabel)}</td><td>${escapeHtml(game.dateTime || '-')}</td><td>${escapeHtml(game.leagueName || '-')}</td><td>${escapeHtml(game.opponent || '-')}</td><td>${game.isHome ? 'Heim' : 'Auswärts'}</td><td>${game.kegel}</td><td>${game.volle}</td><td>${game.abraeumen}</td><td>${game.fehl}</td><td>${game.mp}</td><td>${game.sp}</td><td>${escapeHtml(game.result || '-')}</td></tr>`
       )
       .join('');
 
     const homeTopRows = selectedPlayerPerformance.homeTopGames
       .map(
         (game) =>
-          `<tr><td>${escapeHtml(game.seasonLabel)}</td><td>${escapeHtml(game.dateTime || '-')}</td><td>${escapeHtml(game.opponent || '-')}</td><td>${game.kegel}</td><td>${game.mp}</td><td>${game.sp}</td></tr>`
+          `<tr><td>${escapeHtml(game.seasonLabel)}</td><td>${escapeHtml(game.dateTime || '-')}</td><td>${escapeHtml(game.opponent || '-')}</td><td>${game.kegel}</td><td>${game.volle}</td><td>${game.abraeumen}</td><td>${game.fehl}</td><td>${game.mp}</td><td>${game.sp}</td></tr>`
       )
       .join('');
 
     const awayTopRows = selectedPlayerPerformance.awayTopGames
       .map(
         (game) =>
-          `<tr><td>${escapeHtml(game.seasonLabel)}</td><td>${escapeHtml(game.dateTime || '-')}</td><td>${escapeHtml(game.opponent || '-')}</td><td>${game.kegel}</td><td>${game.mp}</td><td>${game.sp}</td></tr>`
+          `<tr><td>${escapeHtml(game.seasonLabel)}</td><td>${escapeHtml(game.dateTime || '-')}</td><td>${escapeHtml(game.opponent || '-')}</td><td>${game.kegel}</td><td>${game.volle}</td><td>${game.abraeumen}</td><td>${game.fehl}</td><td>${game.mp}</td><td>${game.sp}</td></tr>`
       )
       .join('');
 
@@ -1102,6 +1419,8 @@ export default function ClubsPage() {
             <div class="metric-box"><div class="metric-label">MP / SP</div><div class="metric-value">${selectedPlayer.totalMp} / ${selectedPlayer.totalSp}</div></div>
             <div class="metric-box"><div class="metric-label">Heim-Ø</div><div class="metric-value">${selectedPlayerPerformance.homeAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div></div>
             <div class="metric-box"><div class="metric-label">Auswärts-Ø</div><div class="metric-value">${selectedPlayerPerformance.awayAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div></div>
+            <div class="metric-box"><div class="metric-label">Ø Volle / Abr.</div><div class="metric-value">${selectedPlayerPerformance.volleAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })} / ${selectedPlayerPerformance.abrAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div></div>
+            <div class="metric-box"><div class="metric-label">Ø Fehlwürfe</div><div class="metric-value">${selectedPlayerPerformance.fehlAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div></div>
             <div class="metric-box"><div class="metric-label">Form (5)</div><div class="metric-value">${selectedPlayerPerformance.recentFormAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div></div>
             <div class="metric-box"><div class="metric-label">Std.-Abw.</div><div class="metric-value">${selectedPlayerPerformance.overallStdDev.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div></div>
           </div>
@@ -1109,19 +1428,19 @@ export default function ClubsPage() {
       </div>
       <div class="card">
         <h2>Saison-Aufschlüsselung</h2>
-        <table><thead><tr><th>Saison</th><th>Spiele</th><th>Ø</th><th>Bestes</th><th>MP</th><th>SP</th></tr></thead><tbody>${seasonRows}</tbody></table>
+        <table><thead><tr><th>Saison</th><th>Spiele</th><th>Ø</th><th>Ø Volle</th><th>Ø Abr.</th><th>Ø Fehl</th><th>Bestes</th><th>MP</th><th>SP</th></tr></thead><tbody>${seasonRows}</tbody></table>
       </div>
       <div class="card">
         <h2>Letzte Spiele</h2>
-        <table><thead><tr><th>Saison</th><th>Datum</th><th>Liga</th><th>Gegner</th><th>Ort</th><th>Kegel</th><th>MP</th><th>SP</th><th>Ergebnis</th></tr></thead><tbody>${recentGames}</tbody></table>
+        <table><thead><tr><th>Saison</th><th>Datum</th><th>Liga</th><th>Gegner</th><th>Ort</th><th>Kegel</th><th>Volle</th><th>Abr.</th><th>Fehl</th><th>MP</th><th>SP</th><th>Ergebnis</th></tr></thead><tbody>${recentGames}</tbody></table>
       </div>
       <div class="card">
         <h2>Top Heimleistungen</h2>
-        <table><thead><tr><th>Saison</th><th>Datum</th><th>Gegner</th><th>Kegel</th><th>MP</th><th>SP</th></tr></thead><tbody>${homeTopRows || '<tr><td colspan="6">Keine Heimspiele</td></tr>'}</tbody></table>
+        <table><thead><tr><th>Saison</th><th>Datum</th><th>Gegner</th><th>Kegel</th><th>Volle</th><th>Abr.</th><th>Fehl</th><th>MP</th><th>SP</th></tr></thead><tbody>${homeTopRows || '<tr><td colspan="9">Keine Heimspiele</td></tr>'}</tbody></table>
       </div>
       <div class="card">
         <h2>Top Auswärtsleistungen</h2>
-        <table><thead><tr><th>Saison</th><th>Datum</th><th>Gegner</th><th>Kegel</th><th>MP</th><th>SP</th></tr></thead><tbody>${awayTopRows || '<tr><td colspan="6">Keine Auswärtsspiele</td></tr>'}</tbody></table>
+        <table><thead><tr><th>Saison</th><th>Datum</th><th>Gegner</th><th>Kegel</th><th>Volle</th><th>Abr.</th><th>Fehl</th><th>MP</th><th>SP</th></tr></thead><tbody>${awayTopRows || '<tr><td colspan="9">Keine Auswärtsspiele</td></tr>'}</tbody></table>
       </div>
       `
     );
@@ -1247,7 +1566,7 @@ export default function ClubsPage() {
     if (historicGameDetails[key] || historicDetailsLoading[key] || !entry.game.game_id) return;
     setHistoricDetailsLoading((prev) => ({ ...prev, [key]: true }));
     try {
-      const rows = (await apiService.getSpielerInfo(entry.seasonId, entry.game.game_id, 1)) as GameDetailRow[];
+      const rows = (await retryAsync(() => apiService.getSpielerInfo(entry.seasonId, entry.game.game_id, 1), 3)) as GameDetailRow[];
       setHistoricGameDetails((prev) => ({ ...prev, [key]: rows }));
     } catch (error) {
       console.warn('Failed to load historic game details', error);
@@ -1392,6 +1711,20 @@ export default function ClubsPage() {
                     className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent"
                   >
                     Team-PNG-Report
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportSeasonsCsv}
+                    className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent"
+                  >
+                    CSV: Saisondaten
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportPlayersCsv}
+                    className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent"
+                  >
+                    CSV: Spieler
                   </button>
                 </div>
               </div>
@@ -1684,6 +2017,9 @@ export default function ClubsPage() {
                       <th className="px-3 py-2 text-left">Spieler</th>
                       <th className="px-3 py-2 text-center">Spiele</th>
                       <th className="px-3 py-2 text-center">Schnitt</th>
+                      <th className="px-3 py-2 text-center">Ø Volle</th>
+                      <th className="px-3 py-2 text-center">Ø Abr.</th>
+                      <th className="px-3 py-2 text-center">Ø Fehl</th>
                       <th className="px-3 py-2 text-center">Bestes</th>
                       <th className="px-3 py-2 text-center">Total Kegel</th>
                       <th className="px-3 py-2 text-center">Total MP</th>
@@ -1700,9 +2036,18 @@ export default function ClubsPage() {
                       const maxSeasonBest = player.seasons.length ? Math.max(...player.seasons.map((season) => season.bestKegel)) : 0;
                       const maxSeasonMp = player.seasons.length ? Math.max(...player.seasons.map((season) => season.totalMp)) : 0;
                       const maxSeasonSp = player.seasons.length ? Math.max(...player.seasons.map((season) => season.totalSp)) : 0;
+                      const maxSeasonVolle = player.seasons.length ? Math.max(...player.seasons.map((season) => (season.statGames > 0 ? season.totalVolle / season.statGames : 0))) : 0;
+                      const maxSeasonAbr = player.seasons.length ? Math.max(...player.seasons.map((season) => (season.statGames > 0 ? season.totalAbr / season.statGames : 0))) : 0;
+                      const minSeasonFehl = player.seasons.length ? Math.min(...player.seasons.filter((season) => season.statGames > 0).map((season) => season.totalFehl / season.statGames)) : Number.POSITIVE_INFINITY;
                       const maxGameKegel = player.gameStats.length ? Math.max(...player.gameStats.map((game) => game.kegel)) : 0;
                       const maxGameMp = player.gameStats.length ? Math.max(...player.gameStats.map((game) => game.mp)) : 0;
                       const maxGameSp = player.gameStats.length ? Math.max(...player.gameStats.map((game) => game.sp)) : 0;
+                      const maxGameVolle = player.gameStats.length ? Math.max(...player.gameStats.map((game) => game.volle)) : 0;
+                      const maxGameAbr = player.gameStats.length ? Math.max(...player.gameStats.map((game) => game.abraeumen)) : 0;
+                      const minGameFehl = player.gameStats.length ? Math.min(...player.gameStats.map((game) => game.fehl)) : Number.POSITIVE_INFINITY;
+                      const avgVolle = player.statGames > 0 ? player.totalVolle / player.statGames : 0;
+                      const avgAbr = player.statGames > 0 ? player.totalAbr / player.statGames : 0;
+                      const avgFehl = player.statGames > 0 ? player.totalFehl / player.statGames : 0;
                       return (
                         <Fragment key={player.name}>
                           <tr
@@ -1717,6 +2062,27 @@ export default function ClubsPage() {
                               }`}
                             >
                               {formatAverage(player.totalKegel, player.games)}
+                            </td>
+                            <td
+                              className={`px-3 py-2 text-center ${
+                                avgVolle === topPlayerStats.bestVolle ? 'bg-rose-100 font-semibold text-rose-900' : ''
+                              }`}
+                            >
+                              {player.statGames > 0 ? avgVolle.toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-'}
+                            </td>
+                            <td
+                              className={`px-3 py-2 text-center ${
+                                avgAbr === topPlayerStats.bestAbr ? 'bg-rose-100 font-semibold text-rose-900' : ''
+                              }`}
+                            >
+                              {player.statGames > 0 ? avgAbr.toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-'}
+                            </td>
+                            <td
+                              className={`px-3 py-2 text-center ${
+                                player.statGames > 0 && avgFehl === topPlayerStats.bestFehl ? 'bg-rose-100 font-semibold text-rose-900' : ''
+                              }`}
+                            >
+                              {player.statGames > 0 ? avgFehl.toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-'}
                             </td>
                             <td
                               className={`px-3 py-2 text-center ${
@@ -1749,7 +2115,7 @@ export default function ClubsPage() {
                           </tr>
                           {isOpen && (
                             <tr className="border-t border-border bg-muted/20">
-                              <td colSpan={7} className="px-3 py-4">
+                              <td colSpan={10} className="px-3 py-4">
                                 <div className="space-y-4">
                                   <div className="grid gap-3 md:grid-cols-4">
                                     <div className="rounded-lg border border-border bg-card p-3">
@@ -1770,6 +2136,20 @@ export default function ClubsPage() {
                                         {player.totalMp.toLocaleString('de-DE')} / {player.totalSp.toLocaleString('de-DE')}
                                       </div>
                                     </div>
+                                    <div className="rounded-lg border border-border bg-card p-3">
+                                      <div className="text-xs text-muted-foreground">Ø Volle / Abr.</div>
+                                      <div className="text-lg font-semibold">
+                                        {player.statGames > 0
+                                          ? `${(player.totalVolle / player.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 })} / ${(player.totalAbr / player.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 })}`
+                                          : '-'}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-lg border border-border bg-card p-3">
+                                      <div className="text-xs text-muted-foreground">Ø Fehlwürfe</div>
+                                      <div className="text-lg font-semibold">
+                                        {player.statGames > 0 ? (player.totalFehl / player.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-'}
+                                      </div>
+                                    </div>
                                   </div>
 
                                   <div>
@@ -1781,6 +2161,9 @@ export default function ClubsPage() {
                                             <th className="px-2 py-2 text-left">Saison</th>
                                             <th className="px-2 py-2 text-center">Spiele</th>
                                             <th className="px-2 py-2 text-center">Schnitt</th>
+                                            <th className="px-2 py-2 text-center">Ø Volle</th>
+                                            <th className="px-2 py-2 text-center">Ø Abr.</th>
+                                            <th className="px-2 py-2 text-center">Ø Fehl</th>
                                             <th className="px-2 py-2 text-center">Bestes</th>
                                             <th className="px-2 py-2 text-center">Total MP</th>
                                             <th className="px-2 py-2 text-center">Total SP</th>
@@ -1799,6 +2182,27 @@ export default function ClubsPage() {
                                                 }`}
                                               >
                                                 {formatAverage(season.totalKegel, season.games)}
+                                              </td>
+                                              <td
+                                                className={`px-2 py-2 text-center ${
+                                                  season.statGames > 0 && season.totalVolle / season.statGames === maxSeasonVolle ? 'bg-rose-100 font-semibold text-rose-900' : ''
+                                                }`}
+                                              >
+                                                {season.statGames > 0 ? (season.totalVolle / season.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-'}
+                                              </td>
+                                              <td
+                                                className={`px-2 py-2 text-center ${
+                                                  season.statGames > 0 && season.totalAbr / season.statGames === maxSeasonAbr ? 'bg-rose-100 font-semibold text-rose-900' : ''
+                                                }`}
+                                              >
+                                                {season.statGames > 0 ? (season.totalAbr / season.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-'}
+                                              </td>
+                                              <td
+                                                className={`px-2 py-2 text-center ${
+                                                  season.statGames > 0 && season.totalFehl / season.statGames === minSeasonFehl ? 'bg-rose-100 font-semibold text-rose-900' : ''
+                                                }`}
+                                              >
+                                                {season.statGames > 0 ? (season.totalFehl / season.statGames).toLocaleString('de-DE', { maximumFractionDigits: 2 }) : '-'}
                                               </td>
                                               <td
                                                 className={`px-2 py-2 text-center ${
@@ -1841,6 +2245,9 @@ export default function ClubsPage() {
                                             <th className="px-2 py-2 text-left">Ort</th>
                                             <th className="px-2 py-2 text-left">Gegner</th>
                                             <th className="px-2 py-2 text-center">Kegel</th>
+                                            <th className="px-2 py-2 text-center">Volle</th>
+                                            <th className="px-2 py-2 text-center">Abr.</th>
+                                            <th className="px-2 py-2 text-center">Fehl</th>
                                             <th className="px-2 py-2 text-center">MP</th>
                                             <th className="px-2 py-2 text-center">SP</th>
                                             <th className="px-2 py-2 text-left">Ergebnis</th>
@@ -1864,6 +2271,27 @@ export default function ClubsPage() {
                                               </td>
                                               <td
                                                 className={`px-2 py-2 text-center ${
+                                                  game.volle === maxGameVolle ? 'bg-rose-100 font-semibold text-rose-900' : ''
+                                                }`}
+                                              >
+                                                {game.volle.toLocaleString('de-DE')}
+                                              </td>
+                                              <td
+                                                className={`px-2 py-2 text-center ${
+                                                  game.abraeumen === maxGameAbr ? 'bg-rose-100 font-semibold text-rose-900' : ''
+                                                }`}
+                                              >
+                                                {game.abraeumen.toLocaleString('de-DE')}
+                                              </td>
+                                              <td
+                                                className={`px-2 py-2 text-center ${
+                                                  game.fehl === minGameFehl ? 'bg-rose-100 font-semibold text-rose-900' : ''
+                                                }`}
+                                              >
+                                                {game.fehl.toLocaleString('de-DE')}
+                                              </td>
+                                              <td
+                                                className={`px-2 py-2 text-center ${
                                                   game.mp === maxGameMp ? 'bg-rose-100 font-semibold text-rose-900' : ''
                                                 }`}
                                               >
@@ -1881,7 +2309,7 @@ export default function ClubsPage() {
                                           ))}
                                           {player.gameStats.length === 0 && (
                                             <tr>
-                                              <td colSpan={10} className="px-2 py-4 text-center text-muted-foreground">
+                                              <td colSpan={13} className="px-2 py-4 text-center text-muted-foreground">
                                                 Keine Spielzeilen für diesen Spieler gefunden.
                                               </td>
                                             </tr>
@@ -1899,7 +2327,7 @@ export default function ClubsPage() {
                     })}
                     {topPlayers.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
+                        <td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">
                           Keine Spieler-Metriken für diesen Verein gefunden.
                         </td>
                       </tr>
@@ -1927,6 +2355,13 @@ export default function ClubsPage() {
                       className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent"
                     >
                       Spieler-PNG-Report
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exportSelectedPlayerGamesCsv}
+                      className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent"
+                    >
+                      CSV: Spieler-Spiele
                     </button>
                   </div>
                 </div>
@@ -1965,7 +2400,7 @@ export default function ClubsPage() {
                     />
                   </div>
                 )}
-                <div className="mt-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+                <div className="mt-4 grid gap-3 md:grid-cols-3 lg:grid-cols-8">
                   <div className="rounded-lg border border-border p-3">
                     <div className="text-xs text-muted-foreground">Heim-Schnitt</div>
                     <div className="text-lg font-semibold">{selectedPlayerPerformance.homeAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
@@ -1999,6 +2434,18 @@ export default function ClubsPage() {
                     <div className="text-xs text-muted-foreground">Konstanz (Std.-Abw.)</div>
                     <div className="text-lg font-semibold">{selectedPlayerPerformance.overallStdDev.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
                     <div className="text-xs text-muted-foreground">Niedriger ist stabiler</div>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <div className="text-xs text-muted-foreground">Ø Volle / Abr.</div>
+                    <div className="text-lg font-semibold">
+                      {selectedPlayerPerformance.volleAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })} / {selectedPlayerPerformance.abrAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Wertung=0 Daten</div>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <div className="text-xs text-muted-foreground">Ø Fehlwürfe</div>
+                    <div className="text-lg font-semibold">{selectedPlayerPerformance.fehlAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
+                    <div className="text-xs text-muted-foreground">Niedriger ist besser</div>
                   </div>
                 </div>
 
@@ -2128,6 +2575,14 @@ export default function ClubsPage() {
                     <div className="text-xs text-muted-foreground">Auswärts-MP-Schnitt</div>
                     <div className="text-lg font-semibold">{selectedPlayerPerformance.awayMpAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
                   </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <div className="text-xs text-muted-foreground">Heim-Ø Volle</div>
+                    <div className="text-lg font-semibold">{selectedPlayerPerformance.homeVolleAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
+                  </div>
+                  <div className="rounded-lg border border-border p-3">
+                    <div className="text-xs text-muted-foreground">Auswärts-Ø Volle</div>
+                    <div className="text-lg font-semibold">{selectedPlayerPerformance.awayVolleAvg.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
+                  </div>
                 </div>
               </section>
             )}
@@ -2136,6 +2591,13 @@ export default function ClubsPage() {
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <h2 className="text-xl font-semibold text-foreground">Historische Spiele ({filteredHistoricGames.length})</h2>
                 <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={exportHistoricGamesCsv}
+                    className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent"
+                  >
+                    CSV: Historische Spiele
+                  </button>
                   <div className="flex flex-col">
                     <label className="mb-1 text-xs text-muted-foreground" htmlFor="historicVenueFilter">Ort</label>
                     <select

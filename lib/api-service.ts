@@ -67,6 +67,9 @@ interface SpieltagEntry {
 }
 
 interface SpielInfoRow extends Array<string> {}
+interface SpielberichtRequest {
+  gameId: string;
+}
 
 class ApiService {
   private static instance: ApiService;
@@ -183,14 +186,20 @@ class ApiService {
     return [];
   }
 
-  async getLeagues(seasonId?: string, districtId?: string): Promise<League[]> {
+  async getLeagues(
+    seasonId?: string,
+    districtId?: string,
+    art: number | string = 2,
+    favorit: string = ''
+  ): Promise<League[]> {
     const id_saison = seasonId || (await this.getCurrentSeason())[0]?.season_id;
     const id_bezirk = districtId || '0'; // default to '0' if not specified
 
     const response = await this.makeRequest('GetLigaArray', {
       id_saison,
       id_bezirk,
-      art: 1
+      favorit,
+      art
     });
 
     if (Array.isArray(response)) {
@@ -454,6 +463,22 @@ class ApiService {
       // Return empty data as fallback
       return [];
     }
+  }
+
+  async generateAdminSpielbericht(payload: SpielberichtRequest): Promise<any> {
+    const response = await fetch('/api/admin/spielbericht', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(String(data?.error || 'Spielbericht konnte nicht erzeugt werden.'));
+    }
+    return data;
   }
 }
 

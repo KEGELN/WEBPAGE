@@ -20,6 +20,11 @@ export default function AdminPage() {
   const [standings, setStandings] = useState<unknown[]>([]);
   const [spielplan, setSpielplan] = useState<unknown[]>([]);
   const [spieltage, setSpieltage] = useState<unknown[]>([]);
+  const [reportGameId, setReportGameId] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState('');
+  const [reportText, setReportText] = useState('');
+  const [reportContext, setReportContext] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -87,6 +92,27 @@ export default function AdminPage() {
   const saveDefaultLeague = () => {
     writeDefaultLeagueId(defaultLeagueInput);
     setSaveMessage(defaultLeagueInput.trim() ? `Default league saved: ${defaultLeagueInput.trim()}` : 'Default league cleared');
+  };
+
+  const generateSpielbericht = async () => {
+    if (!reportGameId.trim()) {
+      setReportError('Bitte game_id eingeben.');
+      return;
+    }
+    setReportLoading(true);
+    setReportError('');
+    try {
+      const payload = {
+        gameId: reportGameId.trim(),
+      };
+      const result = await apiService.generateAdminSpielbericht(payload);
+      setReportText(String(result?.report || ''));
+      setReportContext(result?.context || null);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : 'Spielbericht konnte nicht erzeugt werden.');
+    } finally {
+      setReportLoading(false);
+    }
   };
 
   return (
@@ -173,6 +199,73 @@ export default function AdminPage() {
               <div className="text-2xl font-semibold text-foreground">{String(item.value)}</div>
             </div>
           ))}
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <h2 className="text-lg font-semibold text-foreground">Spielbericht Generator (Grok)</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Nur <code>id_spiel</code> eingeben. Alle weiteren Daten (Saison/Liga/Details/Tabelle/Restspiele) werden automatisch aus der API geholt.
+          </p>
+          <div className="mt-4">
+            <div className="flex max-w-md flex-col">
+              <label className="mb-1 text-sm font-medium" htmlFor="reportGameId">Game ID (id_spiel)</label>
+              <input
+                id="reportGameId"
+                value={reportGameId}
+                onChange={(e) => setReportGameId(e.target.value)}
+                className="bg-background border border-border rounded-md px-3 py-2 text-foreground"
+                placeholder="z. B. 143427"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={generateSpielbericht}
+              disabled={reportLoading}
+              className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-60"
+            >
+              {reportLoading ? 'Generiere...' : 'Spielbericht generieren'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setReportText('');
+                setReportContext(null);
+                setReportError('');
+              }}
+              className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent"
+            >
+              Ausgabe leeren
+            </button>
+          </div>
+          {reportError && <p className="mt-3 text-sm text-red-700">{reportError}</p>}
+          {reportText && (
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-medium text-foreground">Generierter Bericht</h3>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(reportText)}
+                  className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-accent"
+                >
+                  Kopieren
+                </button>
+              </div>
+              <textarea
+                value={reportText}
+                onChange={(e) => setReportText(e.target.value)}
+                rows={26}
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-foreground"
+              />
+            </div>
+          )}
+          {reportContext && (
+            <details className="mt-4">
+              <summary className="cursor-pointer font-medium">Generator-Kontext JSON</summary>
+              <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-muted/30 p-3 text-xs">{JSON.stringify(reportContext, null, 2)}</pre>
+            </details>
+          )}
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-5">
