@@ -1,0 +1,569 @@
+{
+  "players": [
+    {
+      "id": "P-HCEEV0",
+      "name": "jan",
+      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "createdAt": "2026-03-30T12:47:53.785Z",
+      "username": "janev0",
+      "tempPassword": "GS1WOY",
+      "passwordResetRequired": true
+    },
+    {
+      "id": "P-HK92IR",
+      "name": "Lennard",
+      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "createdAt": "2026-03-30T14:10:19.021Z",
+      "username": "lennard2ir",
+      "tempPassword": "41JSED",
+      "passwordResetRequired": true
+    }
+  ],
+  "sessions": [
+    {
+      "id": "session_1774880090980",
+      "playerId": "T-LENNARDSDR",
+      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "timestamp": "2026-03-30T14:14:50.980Z",
+      "type": "standard",
+      "throws": [
+        {
+          "id": 1774880047467,
+          "pins": [
+            1,
+            3,
+            5,
+            6,
+            8,
+            9
+          ],
+          "timestamp": "2026-03-30T14:14:07.467Z"
+        },
+        {
+          "id": 1774880050744,
+          "pins": [
+            1,
+            3,
+            5,
+            6,
+            8
+          ],
+          "timestamp": "2026-03-30T14:14:10.744Z"
+        },
+        {
+          "id": 1774880055928,
+          "pins": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "timestamp": "2026-03-30T14:14:15.928Z"
+        },
+        {
+          "id": 1774880059248,
+          "pins": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "timestamp": "2026-03-30T14:14:19.248Z"
+        },
+        {
+          "id": 1774880083043,
+          "pins": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "timestamp": "2026-03-30T14:14:43.043Z"
+        },
+        {
+          "id": 1774880086522,
+          "pins": [
+            1
+          ],
+          "timestamp": "2026-03-30T14:14:46.522Z"
+        }
+      ]
+    },
+    {
+      "id": "session_1774877207586",
+      "playerId": "P-HCEEV0",
+      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "timestamp": "2026-03-30T13:26:47.586Z",
+      "type": "standard",
+      "throws": [
+        {
+          "id": 1774877206484,
+          "pins": [
+            1,
+            2,
+            3
+          ],
+          "timestamp": "2026-03-30T13:26:46.484Z"
+        }
+      ]
+    },
+    {
+      "id": "session_1774877191865",
+      "playerId": "P-HCEEV0",
+      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "timestamp": "2026-03-30T13:26:31.865Z",
+      "type": "game_120",
+      "throws": [],
+      "lanes": {
+        "1": [
+          {
+            "id": 1774877171932,
+            "pins": [
+              3,
+              6,
+              8,
+              9
+            ],
+            "timestamp": "2026-03-30T13:26:11.932Z"
+          },
+          {
+            "id": 1774877172912,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:12.912Z"
+          },
+          {
+            "id": 1774877173049,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:13.049Z"
+          },
+          {
+            "id": 1774877173199,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:13.199Z"
+          },
+          {
+            "id": 1774877173373,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:13.373Z"
+          },
+          {
+            "id": 1774877173514,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:13.514Z"
+          },
+          {
+            "id": 1774877173660,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:13.660Z"
+          },
+          {
+            "id": 1774877173808,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:13.808Z"
+          },
+          {
+            "id": 1774877173976,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:13.976Z"
+          },
+          {
+            "id": 1774877174456,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:14.456Z"
+          },
+          {
+            "id": 1774877174617,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:14.617Z"
+          },
+          {
+            "id": 1774877174773,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:14.773Z"
+          },
+          {
+            "id": 1774877174923,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:14.923Z"
+          },
+          {
+            "id": 1774877176157,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:16.157Z"
+          },
+          {
+            "id": 1774877176336,
+            "pins": [],
+            "timestamp": "2026-03-30T13:26:16.336Z"
+          },
+          {
+            "id": 1774877179547,
+            "pins": [
+              1,
+              3,
+              5
+            ],
+            "timestamp": "2026-03-30T13:26:19.547Z"
+          },
+          {
+            "id": 1774877181783,
+            "pins": [
+              6,
+              8,
+              9
+            ],
+            "timestamp": "2026-03-30T13:26:21.783Z"
+          },
+          {
+            "id": 1774877184429,
+            "pins": [
+              2,
+              4,
+              7
+            ],
+            "timestamp": "2026-03-30T13:26:24.429Z"
+          }
+        ],
+        "2": [],
+        "3": [],
+        "4": []
+      }
+    },
+    {
+      "id": "session_1774875003063",
+      "playerId": "P-HCEEV0",
+      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "timestamp": "2026-03-30T12:50:03.063Z",
+      "throws": [
+        {
+          "id": 1774874957109,
+          "pins": [
+            1,
+            2,
+            3,
+            5
+          ],
+          "timestamp": "2026-03-30T12:49:17.109Z"
+        },
+        {
+          "id": 1774874959808,
+          "pins": [
+            3,
+            5,
+            6,
+            8,
+            9
+          ],
+          "timestamp": "2026-03-30T12:49:19.808Z"
+        },
+        {
+          "id": 1774874963584,
+          "pins": [
+            1,
+            2,
+            4,
+            5,
+            7,
+            9
+          ],
+          "timestamp": "2026-03-30T12:49:23.584Z"
+        },
+        {
+          "id": 1774874967296,
+          "pins": [
+            1,
+            3,
+            4,
+            6,
+            7,
+            8
+          ],
+          "timestamp": "2026-03-30T12:49:27.296Z"
+        },
+        {
+          "id": 1774874972446,
+          "pins": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "timestamp": "2026-03-30T12:49:32.446Z"
+        },
+        {
+          "id": 1774874979194,
+          "pins": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "timestamp": "2026-03-30T12:49:39.194Z"
+        },
+        {
+          "id": 1774874984413,
+          "pins": [
+            1,
+            3,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "timestamp": "2026-03-30T12:49:44.413Z"
+        },
+        {
+          "id": 1774874991471,
+          "pins": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "timestamp": "2026-03-30T12:49:51.471Z"
+        }
+      ]
+    },
+    {
+      "id": "session_1774874914839",
+      "playerId": "P-HCEEV0",
+      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "timestamp": "2026-03-30T12:48:34.839Z",
+      "throws": [
+        {
+          "id": 1774874894951,
+          "pins": [
+            1,
+            2,
+            3
+          ],
+          "timestamp": "2026-03-30T12:48:14.951Z"
+        },
+        {
+          "id": 1774874898660,
+          "pins": [
+            3,
+            5,
+            6,
+            8
+          ],
+          "timestamp": "2026-03-30T12:48:18.660Z"
+        },
+        {
+          "id": 1774874903284,
+          "pins": [
+            3,
+            5,
+            6,
+            7,
+            8
+          ],
+          "timestamp": "2026-03-30T12:48:23.284Z"
+        },
+        {
+          "id": 1774874907462,
+          "pins": [
+            1,
+            2,
+            4,
+            5,
+            7,
+            9
+          ],
+          "timestamp": "2026-03-30T12:48:27.462Z"
+        },
+        {
+          "id": 1774874911532,
+          "pins": [
+            1,
+            3,
+            5,
+            6,
+            8,
+            9
+          ],
+          "timestamp": "2026-03-30T12:48:31.532Z"
+        }
+      ]
+    }
+  ],
+  "trainers": [
+    {
+      "email": "lennardsdrojek42@gmail.com",
+      "name": "lennardsdrojek42",
+      "role": "trainer"
+    }
+  ],
+  "trainerMessages": [
+    {
+      "playerId": "P-HK92IR",
+      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "text": "Hello",
+      "id": "msg_1774880265932_ko8du8",
+      "createdAt": "2026-03-30T14:17:45.932Z"
+    },
+    {
+      "playerId": "P-HCEEV0",
+      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "text": "Spiele rechte gasse",
+      "id": "msg_1774878636277_qcejkk",
+      "createdAt": "2026-03-30T13:50:36.277Z"
+    }
+  ],
+  "clubs": [
+    {
+      "id": "club_1774878101066_s4x3bi",
+      "name": "KSC I",
+      "ownerTrainerEmail": "lennardsdrojek42@gmail.com",
+      "inviteToken": "PL2LWLLJ",
+      "createdAt": "2026-03-30T13:41:41.066Z",
+      "allowedPlayerIds": [
+        "P-HCEEV0"
+      ]
+    }
+  ],
+  "clubMembers": [
+    {
+      "clubId": "club_1774878101066_s4x3bi",
+      "memberType": "trainer",
+      "memberId": "lennardsdrojek42@gmail.com",
+      "displayName": "lennardsdrojek42",
+      "joinedAt": "2026-03-30T13:41:41.066Z"
+    }
+  ],
+  "clubMessages": [
+    {
+      "clubId": "club_1774878101066_s4x3bi",
+      "authorType": "trainer",
+      "authorId": "lennardsdrojek42@gmail.com",
+      "authorName": "lennardsdrojek42",
+      "text": "Hello",
+      "id": "clubmsg_1774878111737_8zqhjg",
+      "createdAt": "2026-03-30T13:41:51.737Z"
+    },
+    {
+      "clubId": "club_1774878101066_s4x3bi",
+      "authorType": "trainer",
+      "authorId": "lennardsdrojek42@gmail.com",
+      "authorName": "lennardsdrojek42",
+      "text": "@123456",
+      "id": "clubmsg_1774878188116_qb4q94",
+      "createdAt": "2026-03-30T13:43:08.116Z"
+    },
+    {
+      "clubId": "club_1774878101066_s4x3bi",
+      "authorType": "trainer",
+      "authorId": "lennardsdrojek42@gmail.com",
+      "authorName": "lennardsdrojek42",
+      "text": "@269214",
+      "id": "clubmsg_1774878286565_f8ne99",
+      "createdAt": "2026-03-30T13:44:46.565Z"
+    },
+    {
+      "clubId": "club_1774878101066_s4x3bi",
+      "authorType": "trainer",
+      "authorId": "lennardsdrojek42@gmail.com",
+      "authorName": "lennardsdrojek42",
+      "text": "This is a test.",
+      "id": "clubmsg_1774878307749_mr7lai",
+      "createdAt": "2026-03-30T13:45:07.749Z"
+    },
+    {
+      "clubId": "club_1774878101066_s4x3bi",
+      "authorType": "trainer",
+      "authorId": "lennardsdrojek42@gmail.com",
+      "authorName": "lennardsdrojek42",
+      "text": "@269214",
+      "id": "clubmsg_1774878509425_bsr5on",
+      "createdAt": "2026-03-30T13:48:29.425Z"
+    },
+    {
+      "clubId": "club_1774878101066_s4x3bi",
+      "authorType": "trainer",
+      "authorId": "lennardsdrojek42@gmail.com",
+      "authorName": "lennardsdrojek42",
+      "text": "@269214",
+      "id": "clubmsg_1774878565275_nisz7j",
+      "createdAt": "2026-03-30T13:49:25.275Z"
+    },
+    {
+      "clubId": "club_1774878101066_s4x3bi",
+      "authorType": "trainer",
+      "authorId": "lennardsdrojek42@gmail.com",
+      "authorName": "lennardsdrojek42",
+      "text": "@320520",
+      "id": "clubmsg_1774878680358_ilq5h6",
+      "createdAt": "2026-03-30T13:51:20.358Z"
+    }
+  ],
+  "clubPolls": [
+    {
+      "id": "poll_1774878188116_oyz5ek",
+      "clubId": "club_1774878101066_s4x3bi",
+      "gameId": "123456",
+      "sourceMessageId": "clubmsg_1774878188116_qb4q94",
+      "createdAt": "2026-03-30T13:43:08.116Z",
+      "votes": [
+        {
+          "memberType": "trainer",
+          "memberId": "lennardsdrojek42@gmail.com",
+          "displayName": "lennardsdrojek42",
+          "status": "no",
+          "updatedAt": "2026-03-30T13:43:14.364Z"
+        }
+      ]
+    },
+    {
+      "id": "poll_1774878286565_wvruso",
+      "clubId": "club_1774878101066_s4x3bi",
+      "gameId": "269214",
+      "sourceMessageId": "clubmsg_1774878286565_f8ne99",
+      "createdAt": "2026-03-30T13:44:46.565Z",
+      "votes": [
+        {
+          "memberType": "trainer",
+          "memberId": "lennardsdrojek42@gmail.com",
+          "displayName": "lennardsdrojek42",
+          "status": "no",
+          "updatedAt": "2026-03-30T13:45:37.797Z"
+        }
+      ]
+    },
+    {
+      "id": "poll_1774878680358_4ab8zl",
+      "clubId": "club_1774878101066_s4x3bi",
+      "gameId": "320520",
+      "sourceMessageId": "clubmsg_1774878680358_ilq5h6",
+      "createdAt": "2026-03-30T13:51:20.358Z",
+      "votes": [
+        {
+          "memberType": "trainer",
+          "memberId": "lennardsdrojek42@gmail.com",
+          "displayName": "lennardsdrojek42",
+          "status": "no",
+          "updatedAt": "2026-03-30T14:18:25.560Z"
+        }
+      ]
+    }
+  ]
+}

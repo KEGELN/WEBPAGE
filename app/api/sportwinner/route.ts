@@ -92,7 +92,8 @@ export async function POST(request: NextRequest) {
 
       case 'GetKlub':
         const query = params.get('name_klub') || '';
-        const clubs = await apiHandler.searchClubs(query);
+        const clubSeasonId = params.get('id_saison') || '11';
+        const clubs = await apiHandler.searchClubs(query, clubSeasonId);
         result = clubs.map(club => [
           club.id,
           club.nr_club,

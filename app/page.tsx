@@ -74,6 +74,9 @@ export default function Home() {
               <a href="/tournaments" className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors">
                 Spielplan
               </a>
+              <a href="/training" className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors">
+                Training
+              </a>
             </div>
           </div>
         </section>

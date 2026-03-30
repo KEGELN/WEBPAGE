@@ -5,13 +5,48 @@ import logo from '@/images/logo.png';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Menu, X } from 'lucide-react';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { Search, Menu, X, UserCircle2, LogOut } from 'lucide-react';
+import { ThemeSelector } from '@/components/ThemeToggle';
+
+type AccountState =
+  | { kind: 'trainer'; label: string }
+  | { kind: 'player'; label: string }
+  | { kind: 'guest'; label: string }
+  | { kind: 'anonymous'; label: string };
+
+function getInitialAccount(): AccountState {
+  if (typeof window === 'undefined') {
+    return { kind: 'anonymous', label: 'Account' };
+  }
+
+  const trainer = localStorage.getItem('trainer_user');
+  const player = localStorage.getItem('player_auth');
+  const guest = localStorage.getItem('guest_user');
+
+  if (trainer) {
+    const parsed = JSON.parse(trainer) as { email?: string };
+    return { kind: 'trainer', label: parsed.email || 'Trainer' };
+  }
+
+  if (player) {
+    const parsed = JSON.parse(player) as { username?: string; name?: string };
+    return { kind: 'player', label: parsed.username || parsed.name || 'Player' };
+  }
+
+  if (guest) {
+    const parsed = JSON.parse(guest) as { name?: string };
+    return { kind: 'guest', label: parsed.name || 'Guest' };
+  }
+
+  return { kind: 'anonymous', label: 'Account' };
+}
 
 export default function Menubar() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [account, setAccount] = useState<AccountState>(() => getInitialAccount());
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,6 +54,15 @@ export default function Menubar() {
       router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
       setIsMobileMenuOpen(false);
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('trainer_user');
+    localStorage.removeItem('player_auth');
+    localStorage.removeItem('guest_user');
+    setAccount({ kind: 'anonymous', label: 'Account' });
+    setIsAccountMenuOpen(false);
+    router.push('/login');
   };
 
   return (
@@ -55,9 +99,15 @@ export default function Menubar() {
             <Link href="/berlin" className="hover:text-primary transition-colors duration-200 font-medium">
               Berlin
             </Link>
+            <Link href="/training" className="hover:text-primary transition-colors duration-200 font-medium">
+              Training
+            </Link>
+            <Link href="/trainer/login" className="hover:text-primary transition-colors duration-200 font-medium">
+              Trainer
+            </Link>
                   </div>
 
-                  {/* Search Bar and Theme Toggle (Desktop) */}
+                  {/* Search Bar and Account Menu (Desktop) */}
                   <div className="hidden md:flex items-center space-x-4">
                       <form onSubmit={handleSearch} className="flex-1 max-w-md">
                           <div className="relative">
@@ -77,12 +127,64 @@ export default function Menubar() {
                               </button>
                           </div>
                       </form>
-                      <ThemeToggle />
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+                          className="flex items-center gap-2 rounded-full border border-border px-3 py-2 text-sm hover:bg-muted"
+                        >
+                          <UserCircle2 className="h-5 w-5" />
+                          <span className="max-w-[140px] truncate">{account.label}</span>
+                        </button>
+
+                        {isAccountMenuOpen && (
+                          <div className="absolute right-0 mt-2 w-72 rounded-2xl border border-border bg-card p-3 shadow-xl">
+                            <div className="mb-3 border-b border-border pb-3">
+                              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Account</div>
+                              <div className="mt-1 text-sm font-semibold">{account.label}</div>
+                            </div>
+
+                            <div className="space-y-1 border-b border-border pb-3">
+                              <Link href="/training" onClick={() => setIsAccountMenuOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-muted">
+                                Player Area
+                              </Link>
+                              <Link href="/trainer/login" onClick={() => setIsAccountMenuOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-muted">
+                                Trainer Area
+                              </Link>
+                              <Link href="/login" onClick={() => setIsAccountMenuOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-muted">
+                                Login
+                              </Link>
+                            </div>
+
+                            <div className="py-3">
+                              <ThemeSelector />
+                            </div>
+
+                            {account.kind !== 'anonymous' && (
+                              <button
+                                type="button"
+                                onClick={handleLogout}
+                                className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+                              >
+                                <LogOut className="h-4 w-4" />
+                                Logout
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                   </div>
 
-                  {/* Mobile Actions: Theme Toggle & Hamburger */}
+                  {/* Mobile Actions: Account & Hamburger */}
                   <div className="flex items-center space-x-4 md:hidden">
-                      <ThemeToggle />
+                      <button
+                          type="button"
+                          onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+                          className="text-foreground focus:outline-none"
+                          aria-label="Toggle account menu"
+                      >
+                          <UserCircle2 size={24} />
+                      </button>
                       <button
                           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                           className="text-foreground focus:outline-none"
@@ -158,8 +260,45 @@ export default function Menubar() {
               >
                 Berlin
               </Link>
+              <Link
+                href="/training"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block px-4 py-2 hover:bg-muted rounded-md transition-colors font-medium"
+              >
+                Training
+              </Link>
                       </div>
                   </div>
+              )}
+
+              {isAccountMenuOpen && (
+                <div className="mt-4 md:hidden rounded-2xl border border-border bg-card p-4 shadow-md">
+                  <div className="mb-3 text-sm font-semibold">{account.label}</div>
+                  <div className="space-y-1 border-b border-border pb-3">
+                    <Link href="/training" onClick={() => setIsAccountMenuOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-muted">
+                      Player Area
+                    </Link>
+                    <Link href="/trainer/login" onClick={() => setIsAccountMenuOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-muted">
+                      Trainer Area
+                    </Link>
+                    <Link href="/login" onClick={() => setIsAccountMenuOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-muted">
+                      Login
+                    </Link>
+                  </div>
+                  <div className="py-3">
+                    <ThemeSelector />
+                  </div>
+                  {account.kind !== 'anonymous' && (
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Logout
+                    </button>
+                  )}
+                </div>
               )}
           </div>
       </nav>

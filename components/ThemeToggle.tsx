@@ -1,6 +1,6 @@
 'use client';
 
-import { Moon, Sun } from 'lucide-react';
+import { Check, Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
 
 function ClubThemeIcon() {
@@ -41,5 +41,43 @@ export function ThemeToggle() {
         <Moon className="h-5 w-5 text-gray-700" />
       )}
     </button>
+  );
+}
+
+export function ThemeSelector() {
+  const { theme, setTheme, toggleTheme } = useTheme();
+
+  const options: Array<{ value: 'default' | 'dark' | 'light'; label: string }> = [
+    { value: 'default', label: 'Club' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'light', label: 'Light' },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Theme</div>
+      <div className="grid gap-1">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setTheme(option.value)}
+            className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
+              theme === option.value ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+            }`}
+          >
+            <span>{option.label}</span>
+            {theme === option.value ? <Check className="h-4 w-4" /> : null}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className="w-full rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted"
+      >
+        Next Theme
+      </button>
+    </div>
   );
 }

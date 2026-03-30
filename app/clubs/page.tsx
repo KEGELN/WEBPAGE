@@ -467,7 +467,7 @@ export default function ClubsPage() {
       );
       const seasonSorted = [...uniqueSeasons]
         .sort((a, b) => Number(b.yearof_season) - Number(a.yearof_season))
-        .slice(0, MAX_SEASONS_TO_SCAN);
+        .slice(0, 8); // Reduced from 20 to 8 for better performance
 
       const allGames: HistoricGameRow[] = [];
       let totalLeaguesChecked = 0;
@@ -484,7 +484,6 @@ export default function ClubsPage() {
           });
         };
 
-        // Global league lists for season (both known art variants).
         const [globalArt2, globalArt1] = (await Promise.all([
           retryAsync(() => apiService.getLeagues(season.season_id, '0', 2), 3).catch(() => [] as League[]),
           retryAsync(() => apiService.getLeagues(season.season_id, '0', 1), 3).catch(() => [] as League[]),
@@ -492,7 +491,6 @@ export default function ClubsPage() {
         addLeagueList(globalArt2);
         addLeagueList(globalArt1);
 
-        // District-specific leagues to ensure we do not miss older/hidden leagues.
         const districts = (await retryAsync(() => apiService.getDistricts(season.season_id), 3).catch(() => [] as { bezirk_id: string }[])) as {
           bezirk_id: string;
         }[];
@@ -511,7 +509,7 @@ export default function ClubsPage() {
               return [] as League[];
             }
           },
-          3
+          6 // Increased concurrency
         );
         districtLeagueLists.forEach((list) => addLeagueList(list));
 
@@ -1139,7 +1137,7 @@ export default function ClubsPage() {
       .slice(0, 30)
       .map(
         (entry) =>
-          `<tr><td>${escapeHtml(entry.seasonLabel)}</td><td>${escapeHtml(entry.leagueName)}</td><td>${escapeHtml(entry.game.spieltag || '-')}</td><td>${escapeHtml(entry.game.date_time || '-')}</td><td>${escapeHtml(entry.game.team_home || '-')}</td><td>${escapeHtml(entry.game.team_away || '-')}</td><td>${escapeHtml(entry.game.result || '-')}</td></tr>`
+          `<tr><td>${escapeHtml(entry.seasonLabel)}</td><td>${escapeHtml(entry.leagueName)}</td><td>${escapeHtml(entry.game.spieltag || '-')}</td><td>${escapeHtml(entry.game.game_id || '-')}</td><td>${escapeHtml(entry.game.date_time || '-')}</td><td>${escapeHtml(entry.game.team_home || '-')}</td><td>${escapeHtml(entry.game.team_away || '-')}</td><td>${escapeHtml(entry.game.result || '-')}</td></tr>`
       )
       .join('');
 
@@ -1198,7 +1196,7 @@ export default function ClubsPage() {
       </div>
       <div class="card">
         <h2>Letzte erkannte Spiele</h2>
-        <table><thead><tr><th>Saison</th><th>Liga</th><th>Spieltag</th><th>Datum</th><th>Heim</th><th>Auswärts</th><th>Ergebnis</th></tr></thead><tbody>${recentGamesRows}</tbody></table>
+        <table><thead><tr><th>Saison</th><th>Liga</th><th>Spieltag</th><th>Game ID</th><th>Datum</th><th>Heim</th><th>Auswärts</th><th>Ergebnis</th></tr></thead><tbody>${recentGamesRows}</tbody></table>
       </div>
       `
     );
@@ -2242,6 +2240,7 @@ export default function ClubsPage() {
                                             <th className="px-2 py-2 text-left">Datum</th>
                                             <th className="px-2 py-2 text-left">Liga</th>
                                             <th className="px-2 py-2 text-left">Spieltag</th>
+                                            <th className="px-2 py-2 text-left">Game ID</th>
                                             <th className="px-2 py-2 text-left">Ort</th>
                                             <th className="px-2 py-2 text-left">Gegner</th>
                                             <th className="px-2 py-2 text-center">Kegel</th>
@@ -2260,6 +2259,7 @@ export default function ClubsPage() {
                                               <td className="px-2 py-2">{game.dateTime || '-'}</td>
                                               <td className="px-2 py-2">{game.leagueName || '-'}</td>
                                               <td className="px-2 py-2">{game.spieltag || '-'}</td>
+                                              <td className="px-2 py-2 font-mono text-[11px]">{game.gameId || '-'}</td>
                                               <td className="px-2 py-2">{game.isHome ? 'Heim' : 'Auswärts'}</td>
                                               <td className="px-2 py-2">{game.opponent || '-'}</td>
                                               <td
@@ -2633,6 +2633,7 @@ export default function ClubsPage() {
                       <th className="px-3 py-2 text-left">Liga</th>
                       <th className="px-3 py-2 text-left">Spieltag</th>
                       <th className="px-3 py-2 text-left">Datum</th>
+                      <th className="px-3 py-2 text-left">Game ID</th>
                       <th className="px-3 py-2 text-left">Ort</th>
                       <th className="px-3 py-2 text-left">Heim</th>
                       <th className="px-3 py-2 text-left">Auswärts</th>
@@ -2653,6 +2654,7 @@ export default function ClubsPage() {
                             <td className="px-3 py-2">{entry.leagueName}</td>
                             <td className="px-3 py-2">{entry.game.spieltag || '-'}</td>
                             <td className="px-3 py-2">{entry.game.date_time || '-'}</td>
+                            <td className="px-3 py-2 font-mono text-xs">{entry.game.game_id || '-'}</td>
                             <td className="px-3 py-2">{entry.isHome ? 'Heim' : 'Auswärts'}</td>
                             <td className="px-3 py-2">{entry.game.team_home || '-'}</td>
                             <td className="px-3 py-2">{entry.game.team_away || '-'}</td>

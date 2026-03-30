@@ -105,12 +105,17 @@ class APIHandler {
 
   /* ---------------- CLUBS ---------------- */
 
-  async searchClubs(query: string): Promise<Club[]> {
-    const params: any = { id_saison: "11" };
-    if (/^\d+$/.test(query)) params.nr_klub = query;
-    else params.name_klub = query;
+  async searchClubs(query: string, seasonId: string = "11"): Promise<Club[]> {
+    const params: any = { id_saison: seasonId };
+    if (/^\d+$/.test(query)) {
+      params.nr_klub = query;
+    } else {
+      params.name_klub = query;
+    }
 
     const res = await this.handleCommand("GetKlub", params);
+    if (!Array.isArray(res)) return [];
+
     return res.map(r => ({
       id: String(r[0]),
       nr_club: String(r[1]),

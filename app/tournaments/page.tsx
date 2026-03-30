@@ -925,6 +925,7 @@ function TournamentsPageContent() {
                       <thead className="bg-muted/70">
                         <tr>
                           <th className="py-3 px-4 text-left text-foreground">Datum/Zeit</th>
+                          <th className="py-3 px-4 text-left text-foreground">Game ID</th>
                           <th className="py-3 px-4 text-left text-foreground">Heim</th>
                           <th className="py-3 px-4 text-left text-foreground">Gast</th>
                           <th className="py-3 px-4 text-left text-foreground">Ergebnis</th>
@@ -949,6 +950,7 @@ function TournamentsPageContent() {
                                 onClick={() => toggleGame(spiel.game_id)}
                               >
                                 <td className="py-3 px-4 whitespace-nowrap">{displayValue(spiel.date_time)}</td>
+                                <td className="py-3 px-4 whitespace-nowrap font-mono text-xs">{displayValue(spiel.game_id)}</td>
                                 <td className="py-3 px-4 min-w-[10rem]">{displayValue(spiel.team_home)}</td>
                                 <td className="py-3 px-4 min-w-[10rem]">{displayValue(spiel.team_away)}</td>
                                 <td className="py-3 px-4 whitespace-nowrap">
@@ -963,7 +965,7 @@ function TournamentsPageContent() {
                               </tr>
                               {isOpen && (
                                 <tr key={`${spiel.game_id}-details`}>
-                                  <td colSpan={4} className="px-4 pb-4">
+                                  <td colSpan={5} className="px-4 pb-4">
                                     {detailsLoading[spiel.game_id] && (
                                       <LoadingSpinner label="Loading game results..." className="py-6" size="sm" />
                                     )}
