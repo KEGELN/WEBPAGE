@@ -107,7 +107,12 @@ export default function AdminPage() {
       };
       const result = await apiService.generateAdminSpielbericht(payload);
       setReportText(String(result?.report || ''));
-      setReportContext(result?.context || null);
+      const context = result?.context;
+      if (context && typeof context === 'object' && !Array.isArray(context)) {
+        setReportContext(Object.fromEntries(Object.entries(context as Record<string, unknown>)));
+      } else {
+        setReportContext(null);
+      }
     } catch (error) {
       setReportError(error instanceof Error ? error.message : 'Spielbericht konnte nicht erzeugt werden.');
     } finally {

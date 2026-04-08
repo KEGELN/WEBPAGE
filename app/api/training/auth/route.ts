@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Trainer } from '@/lib/db';
 import { serverDb } from '@/lib/server-db';
 
 export async function POST(request: NextRequest) {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
     
     if (action === 'trainer-login') {
       if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 });
-      const trainer = { email: email.toLowerCase(), name: email.split('@')[0], role: 'trainer' };
+      const trainer: Trainer = { email: email.toLowerCase(), name: email.split('@')[0], role: 'trainer' };
       serverDb.saveTrainer(trainer);
       return NextResponse.json(trainer);
     }

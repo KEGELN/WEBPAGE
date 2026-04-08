@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
+import NextImage from 'next/image';
 import Menubar from '@/components/menubar';
 import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -2395,7 +2395,7 @@ export default function ClubsPage() {
                 </div>
                 {playerImageDataUrl && (
                   <div className="mt-3">
-                    <Image
+                    <NextImage
                       src={playerImageDataUrl}
                       alt="Player upload preview"
                       width={320}

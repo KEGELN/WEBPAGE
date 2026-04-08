@@ -45,7 +45,7 @@ class PlayerService {
       const rawPlayerData = await this.apiService.getFullPlayerStats(seasonId, leagueId, spieltagNr);
 
       // Return the raw data directly since the component expects the detailed stats format
-      return rawPlayerData as Player[];
+      return rawPlayerData as unknown as Player[];
     } catch (error) {
       console.error('Error fetching player list:', error);
       throw error; // Re-throw the error instead of returning mock data

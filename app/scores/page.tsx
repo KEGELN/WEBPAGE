@@ -9,6 +9,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { readDefaultLeagueId } from '@/lib/client-settings';
 
 type PlayerRow = {
+  id?: string;
   rank?: number;
   name?: string;
   club?: string;
@@ -41,6 +42,16 @@ type SeasonOption = { season_id: string; yearof_season: number; status: number }
 type LeagueOption = { liga_id: string; name_der_liga: string };
 type SpieltagOption = { id: string; nr: string; label: string; status: string };
 type StandingRow = Array<string | number | null | undefined>;
+
+function asString(value: string | number | undefined): string {
+  return String(value ?? '');
+}
+
+function asReactText(value: unknown): string {
+  if (value === null || value === undefined) return '-';
+  if (typeof value === 'number' && !Number.isFinite(value)) return '-';
+  return String(value);
+}
 
 export default function ScoresPage() {
   const router = useRouter();
@@ -147,11 +158,7 @@ export default function ScoresPage() {
     }
   }, [players]);
 
-  const displayValue = (value: unknown) => {
-    if (value === null || value === undefined) return '-';
-    if (typeof value === 'number' && !Number.isFinite(value)) return '-';
-    return value;
-  };
+  const displayValue = (value: unknown) => asReactText(value);
 
   const formatNumber = (value: unknown) => {
     if (value === null || value === undefined) return '-';
@@ -245,44 +252,44 @@ export default function ScoresPage() {
         bValue = b.club || '';
         break;
       case 'totalGames':
-        aValue = parseInt(a.gamesTotal || a.totalGames || a.games || 0);
-        bValue = parseInt(b.gamesTotal || b.totalGames || b.games || 0);
+        aValue = parseInt(asString(a.gamesTotal || a.totalGames || a.games || 0), 10);
+        bValue = parseInt(asString(b.gamesTotal || b.totalGames || b.games || 0), 10);
         break;
       case 'average':
         aValue = parseFloat((a.avgTotal || a.average || a.schnitt || '0').replace(',', '.'));
         bValue = parseFloat((b.avgTotal || b.average || b.schnitt || '0').replace(',', '.'));
         break;
       case 'points':
-        aValue = parseInt(a.mpTotal || a.points || 0);
-        bValue = parseInt(b.mpTotal || b.points || 0);
+        aValue = parseInt(asString(a.mpTotal || a.points || 0), 10);
+        bValue = parseInt(asString(b.mpTotal || b.points || 0), 10);
         break;
       case 'homeGames':
-        aValue = parseInt(a.gamesHome || a.homeGames || 0);
-        bValue = parseInt(b.gamesHome || b.homeGames || 0);
+        aValue = parseInt(asString(a.gamesHome || a.homeGames || 0), 10);
+        bValue = parseInt(asString(b.gamesHome || b.homeGames || 0), 10);
         break;
       case 'homeAverage':
         aValue = parseFloat((a.avgHome || a.homeAverage || '0').replace(',', '.'));
         bValue = parseFloat((b.avgHome || b.homeAverage || '0').replace(',', '.'));
         break;
       case 'homePoints':
-        aValue = parseInt(a.mpHome || a.homePoints || 0);
-        bValue = parseInt(b.mpHome || b.homePoints || 0);
+        aValue = parseInt(asString(a.mpHome || a.homePoints || 0), 10);
+        bValue = parseInt(asString(b.mpHome || b.homePoints || 0), 10);
         break;
       case 'awayGames':
-        aValue = parseInt(a.gamesAway || a.awayGames || 0);
-        bValue = parseInt(b.gamesAway || b.awayGames || 0);
+        aValue = parseInt(asString(a.gamesAway || a.awayGames || 0), 10);
+        bValue = parseInt(asString(b.gamesAway || b.awayGames || 0), 10);
         break;
       case 'awayAverage':
         aValue = parseFloat((a.avgAway || a.awayAverage || '0').replace(',', '.'));
         bValue = parseFloat((b.avgAway || b.awayAverage || '0').replace(',', '.'));
         break;
       case 'awayPoints':
-        aValue = parseInt(a.mpAway || a.awayPoints || 0);
-        bValue = parseInt(b.mpAway || b.awayPoints || 0);
+        aValue = parseInt(asString(a.mpAway || a.awayPoints || 0), 10);
+        bValue = parseInt(asString(b.mpAway || b.awayPoints || 0), 10);
         break;
       case 'best':
-        aValue = parseInt(a.bestGame || a.best || 0);
-        bValue = parseInt(b.bestGame || b.best || 0);
+        aValue = parseInt(asString(a.bestGame || a.best || 0), 10);
+        bValue = parseInt(asString(b.bestGame || b.best || 0), 10);
         break;
       default:
         return 0;
@@ -611,7 +618,7 @@ export default function ScoresPage() {
                   <tr
                     key={player.id ?? index}
                     className="border-b border-border hover:bg-accent/50 transition-colors cursor-pointer"
-                    onClick={() => handlePlayerClick(player.name)}
+                    onClick={() => handlePlayerClick(player.name || '')}
                   >
                     <td className="py-3 px-4">{displayValue(player.rank)}</td>
                     <td className="py-3 px-4 font-medium text-foreground">{displayValue(player.name)}</td>

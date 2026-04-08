@@ -72,6 +72,7 @@ export default function TrainerDashboard() {
   };
 
   const handleDeletePlayer = async (id: string) => {
+    if (!trainer) return;
     if (!confirm('Möchtest du diesen Spieler wirklich löschen?')) return;
     await db.deletePlayer(id);
     await refreshData(trainer.email);

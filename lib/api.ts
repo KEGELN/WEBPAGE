@@ -41,9 +41,9 @@ export async function getSeasons(): Promise<Season[]> {
     // The API returns results in a nested array format
     // Transform to proper objects based on API spec: [season_id, yearof_season, status]
     return data.map((item: unknown[]) => ({
-      season_id: item[0],
-      yearof_season: parseInt(item[1]),
-      status: parseInt(item[2])
+      season_id: String(item[0] ?? ''),
+      yearof_season: parseInt(String(item[1] ?? '0'), 10),
+      status: parseInt(String(item[2] ?? '0'), 10)
     }));
   } catch (error) {
     console.error('Error fetching seasons:', error);
@@ -96,9 +96,9 @@ export async function searchClubs(query: string): Promise<ClubResult[]> {
 
     // The API returns results in format [ [id, nr_club, name_klub], ... ]
     return data.map((item: unknown[]) => ({
-      id: item[0],
-      nr_club: item[1],
-      name_klub: item[2]
+      id: String(item[0] ?? ''),
+      nr_club: String(item[1] ?? ''),
+      name_klub: String(item[2] ?? '')
     }));
   } catch (error) {
     console.error('Error searching clubs:', error);

@@ -189,9 +189,9 @@ type SendClubMessagePayload = {
   text: string;
 };
 
-function toQuery(params: Record<string, string | undefined>) {
+function toQuery(params: object) {
   return new URLSearchParams(
-    Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined))
+    Object.entries(params as Record<string, string | undefined>).filter(([, value]) => value !== undefined) as [string, string][]
   ).toString();
 }
 

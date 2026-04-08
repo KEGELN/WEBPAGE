@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Menubar from '@/components/menubar';
 import { db, Player, Throw, Trainer, TrainingSession } from '@/lib/db';
@@ -81,7 +81,7 @@ function getTrainingPlayer(): Player | null {
   };
 }
 
-export default function TrainingSessionPage() {
+function TrainingSessionPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMounted = useSyncExternalStore(
@@ -520,5 +520,13 @@ export default function TrainingSessionPage() {
         </section>
       </main>
     </div>
+  );
+}
+
+export default function TrainingSessionPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background text-foreground" />}>
+      <TrainingSessionPageContent />
+    </Suspense>
   );
 }
