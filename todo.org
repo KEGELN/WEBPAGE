@@ -1,0 +1,2 @@
+adding button when in röumer to say that all where hit
+a button to click if one made a 9 aka a strike.
