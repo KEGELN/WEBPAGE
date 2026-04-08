@@ -19,6 +19,7 @@ interface District {
 
 interface League {
   liga_id: string;
+  wertung?: string;
   name_der_liga: string;
   kontakt_name?: string;
   kontakt_tel1?: string;
@@ -66,7 +67,10 @@ interface SpieltagEntry {
   status: string;
 }
 
-interface SpielInfoRow extends Array<string> {}
+type SportwinnerCell = string | number | null | undefined;
+type SportwinnerRow = SportwinnerCell[];
+type SportwinnerTable = SportwinnerRow[];
+type SpielInfoRow = string[];
 interface SpielberichtRequest {
   gameId: string;
 }
@@ -74,7 +78,7 @@ interface SpielberichtRequest {
 class ApiService {
   private static instance: ApiService;
   private static readonly REQUEST_TIMEOUT_MS = 15000;
-  private readonly inFlightRequests = new Map<string, Promise<any>>();
+  private readonly inFlightRequests = new Map<string, Promise<unknown>>();
 
   static getInstance(): ApiService {
     if (!ApiService.instance) {
@@ -83,7 +87,7 @@ class ApiService {
     return ApiService.instance;
   }
 
-  private async makeRequest(command: string, params: Record<string, any>): Promise<any> {
+  private async makeRequest(command: string, params: Record<string, string | number | undefined>): Promise<unknown> {
     // Make request to the server-side API route
     const formData = new URLSearchParams({
       command: command,
@@ -116,8 +120,7 @@ class ApiService {
           return [];
         }
 
-        const data = await response.json();
-        return data;
+        return await response.json();
       } catch (error) {
         if ((error as { name?: string })?.name === 'AbortError') {
           console.warn(`Sportwinner request timed out for ${command}`);
@@ -134,87 +137,92 @@ class ApiService {
     return requestPromise;
   }
 
+  private asTable(value: unknown): SportwinnerTable {
+    return Array.isArray(value) ? value.filter((row): row is SportwinnerRow => Array.isArray(row)) : [];
+  }
+
   async getCurrentSeason(): Promise<Season[]> {
-    const response = await this.makeRequest('GetSaisonArray', {});
+    const response = this.asTable(await this.makeRequest('GetSaisonArray', {}));
 
     // Format the response to match the expected interface
-    if (Array.isArray(response)) {
-      return response.map(item => ({
-        season_id: item[0],
-        yearof_season: parseInt(item[1]),
-        status: parseInt(item[2])
-      }));
-    }
-
-    return [];
+    return response.map(item => ({
+      season_id: String(item[0] ?? ''),
+      yearof_season: parseInt(String(item[1] ?? '0'), 10),
+      status: parseInt(String(item[2] ?? '0'), 10)
+    }));
   }
 
   async searchClubs(query: string, seasonId?: string): Promise<Club[]> {
     // If no season ID is provided, try to get the current season
     const id_saison = seasonId || (await this.getCurrentSeason())[0]?.season_id;
 
-    const response = await this.makeRequest('GetKlub', {
+    const response = this.asTable(await this.makeRequest('GetKlub', {
       id_saison,
       name_klub: query
-    });
+    }));
 
-    if (Array.isArray(response)) {
-      return response.map(item => ({
-        id: item[0], // This might be the club ID based on api.org
-        nr_club: item[1],
-        name_klub: item[2],
-      }));
-    }
-
-    return [];
+    return response.map(item => ({
+      id: String(item[0] ?? ''), // This might be the club ID based on api.org
+      nr_club: String(item[1] ?? ''),
+      name_klub: String(item[2] ?? ''),
+    }));
   }
 
   async getDistricts(seasonId?: string): Promise<District[]> {
     const id_saison = seasonId || (await this.getCurrentSeason())[0]?.season_id;
 
-    const response = await this.makeRequest('GetBezirkArray', {
+    const response = this.asTable(await this.makeRequest('GetBezirkArray', {
       id_saison
-    });
+    }));
 
-    if (Array.isArray(response)) {
-      return response.map(item => ({
-        bezirk_id: item[0],
-        name_des_bezirks: item[1],
-      }));
-    }
-
-    return [];
+    return response.map(item => ({
+      bezirk_id: String(item[0] ?? ''),
+      name_des_bezirks: String(item[1] ?? ''),
+    }));
   }
 
   async getLeagues(
     seasonId?: string,
     districtId?: string,
-    art: number | string = 2,
+    art?: number | string,
     favorit: string = ''
   ): Promise<League[]> {
     const id_saison = seasonId || (await this.getCurrentSeason())[0]?.season_id;
     const id_bezirk = districtId || '0'; // default to '0' if not specified
 
-    const response = await this.makeRequest('GetLigaArray', {
-      id_saison,
-      id_bezirk,
-      favorit,
-      art
+    const artsToFetch = art === undefined ? [2, 1] : [art];
+    const responses = await Promise.all(
+      artsToFetch.map((currentArt) =>
+        this.makeRequest('GetLigaArray', {
+          id_saison,
+          id_bezirk,
+          favorit,
+          art: currentArt
+        })
+      )
+    );
+
+    const leagues = responses.flatMap((response) =>
+      this.asTable(response).map((item) => ({
+        liga_id: String(item[0] ?? ''),
+        wertung: String(item[1] ?? ''),
+        name_der_liga: String(item[2] ?? ''),
+        kontakt_name: String(item[4] ?? ''),
+        kontakt_tel1: String(item[5] ?? ''),
+        kontakt_tel2: String(item[6] ?? ''),
+        kontakt_email1: String(item[7] ?? ''),
+        kontakt_email2: String(item[8] ?? ''),
+      }))
+    );
+
+    const deduped = new Map<string, League>();
+    leagues.forEach((league) => {
+      if (league.liga_id) {
+        deduped.set(league.liga_id, league);
+      }
     });
 
-    if (Array.isArray(response)) {
-      return response.map(item => ({
-        liga_id: item[0],
-        name_der_liga: item[2],
-        kontakt_name: item[4],
-        kontakt_tel1: item[5],
-        kontakt_tel2: item[6],
-        kontakt_email1: item[7],
-        kontakt_email2: item[8],
-      }));
-    }
-
-    return [];
+    return Array.from(deduped.values());
   }
 
   async getGames(seasonId?: string, leagueId?: string, districtId?: string): Promise<Game[]> {
@@ -222,7 +230,7 @@ class ApiService {
     const id_liga = leagueId;
     const id_bezirk = districtId || '0';
 
-    const response = await this.makeRequest('GetSpiel', {
+    const response = this.asTable(await this.makeRequest('GetSpiel', {
       id_saison,
       id_klub: 0,
       id_bezirk,
@@ -231,49 +239,41 @@ class ApiService {
       art_bezirk: 2,
       art_liga: 0,
       art_spieltag: 0
-    });
+    }));
 
-    if (Array.isArray(response)) {
-      return response.map(item => ({
-        game_id: item[0],
-        spiel_datum: item[1],
-        spiel_uhrzeit: item[2],
-        team1_name: item[3],
-        team2_name: item[6],
-        status: item[9],
-        additional_info: item[13],
-      }));
-    }
-
-    return [];
+    return response.map(item => ({
+      game_id: String(item[0] ?? ''),
+      spiel_datum: String(item[1] ?? ''),
+      spiel_uhrzeit: String(item[2] ?? ''),
+      team1_name: String(item[3] ?? ''),
+      team2_name: String(item[6] ?? ''),
+      status: String(item[9] ?? ''),
+      additional_info: String(item[10] ?? item[13] ?? ''),
+    }));
   }
 
   async getStandings(leagueId: string, seasonId?: string): Promise<Standings[]> {
     const id_saison = seasonId || (await this.getCurrentSeason())[0]?.season_id;
 
-    const response = await this.makeRequest('GetTabelle', {
+    const response = this.asTable(await this.makeRequest('GetTabelle', {
       id_saison,
       id_liga: leagueId,
       nr_spieltag: 100,
       sort: 0
-    });
+    }));
 
-    if (Array.isArray(response)) {
-      return response.map(item => ({
-        team_id: item[0],
-        position: parseInt(item[1]),
-        team_name: item[2],
-        spiele: parseInt(item[5]),
-        siege: parseInt(item[6]),
-        niederlagen: parseInt(item[7]),
-        punkte: parseFloat(item[13]),
-      }));
-    }
-
-    return [];
+    return response.map(item => ({
+      team_id: String(item[0] ?? ''),
+      position: parseInt(String(item[1] ?? '0'), 10),
+      team_name: String(item[2] ?? ''),
+      spiele: parseInt(String(item[5] ?? '0'), 10),
+      siege: parseInt(String(item[6] ?? '0'), 10),
+      niederlagen: parseInt(String(item[7] ?? '0'), 10),
+      punkte: parseFloat(String(item[13] ?? '0')),
+    }));
   }
 
-  async getStandingsRaw(leagueId: string, seasonId?: string, spieltagNr: number = 100, sort: number = 0): Promise<any[]> {
+  async getStandingsRaw(leagueId: string, seasonId?: string, spieltagNr: number = 100, sort: number = 0): Promise<SportwinnerTable> {
     const id_saison = seasonId || (await this.getCurrentSeason())[0]?.season_id;
 
     const response = await this.makeRequest('GetTabelle', {
@@ -283,65 +283,53 @@ class ApiService {
       sort
     });
 
-    return Array.isArray(response) ? response : [];
+    return this.asTable(response);
   }
 
   async getSpielplan(seasonId: string, leagueId: string): Promise<SpielplanEntry[]> {
-    const response = await this.makeRequest('GetSpielplan', {
+    const response = this.asTable(await this.makeRequest('GetSpielplan', {
       id_saison: seasonId,
       id_liga: leagueId,
-    });
+    }));
 
-    if (Array.isArray(response)) {
-      return response.map((item: any[]) => ({
-        spieltag: String(item[0] ?? ''),
-        game_id: String(item[1] ?? ''),
-        game_nr: String(item[2] ?? ''),
-        date_time: String(item[3] ?? ''),
-        team_home: String(item[4] ?? ''),
-        team_away: String(item[5] ?? ''),
-        result: String(item[6] ?? ''),
-        points_home: String(item[7] ?? ''),
-        points_away: String(item[8] ?? ''),
-      }));
-    }
-
-    return [];
+    return response.map((item) => ({
+      spieltag: String(item[0] ?? ''),
+      game_id: String(item[1] ?? ''),
+      game_nr: String(item[2] ?? ''),
+      date_time: String(item[3] ?? ''),
+      team_home: String(item[4] ?? ''),
+      team_away: String(item[5] ?? ''),
+      result: String(item[6] ?? ''),
+      points_home: String(item[7] ?? ''),
+      points_away: String(item[8] ?? ''),
+    }));
   }
 
   async getSpieltage(seasonId: string, leagueId: string): Promise<SpieltagEntry[]> {
-    const response = await this.makeRequest('GetSpieltagArray', {
+    const response = this.asTable(await this.makeRequest('GetSpieltagArray', {
       id_saison: seasonId,
       id_liga: leagueId,
-    });
+    }));
 
-    if (Array.isArray(response)) {
-      return response.map((item: any[]) => ({
-        id: String(item[0] ?? ''),
-        nr: String(item[1] ?? ''),
-        label: String(item[2] ?? ''),
-        status: String(item[3] ?? ''),
-      }));
-    }
-
-    return [];
+    return response.map((item) => ({
+      id: String(item[0] ?? ''),
+      nr: String(item[1] ?? ''),
+      label: String(item[2] ?? ''),
+      status: String(item[3] ?? ''),
+    }));
   }
 
   async getSpielerInfo(seasonId: string, gameId: string, wertung: number = 1): Promise<SpielInfoRow[]> {
-    const response = await this.makeRequest('GetSpielerInfo', {
+    const response = this.asTable(await this.makeRequest('GetSpielerInfo', {
       id_saison: seasonId,
       id_spiel: gameId,
       wertung
-    });
+    }));
 
-    if (Array.isArray(response)) {
-      return response as SpielInfoRow[];
-    }
-
-    return [];
+    return response.map((row) => row.map((cell) => String(cell ?? '')));
   }
 
-  async getGamesBySpieltag(seasonId: string, leagueId: string, spieltagId: string): Promise<any[]> {
+  async getGamesBySpieltag(seasonId: string, leagueId: string, spieltagId: string): Promise<SportwinnerTable> {
     const response = await this.makeRequest('GetSpiel', {
       id_saison: seasonId,
       id_klub: 0,
@@ -354,10 +342,10 @@ class ApiService {
       art_spieltag: 2,
     });
 
-    return Array.isArray(response) ? response : [];
+    return this.asTable(response);
   }
 
-  async getSchnitt(seasonId?: string, leagueId?: string, clubId?: string, spieltagNr: number = 100, sort: number = 1, anzahl: number = 1): Promise<any[]> {
+  async getSchnitt(seasonId?: string, leagueId?: string, clubId?: string, spieltagNr: number = 100, sort: number = 1, anzahl: number = 1): Promise<SportwinnerTable> {
     const id_saison = seasonId || (await this.getCurrentSeason())[0]?.season_id;
     const id_klub = clubId || '0';
     const id_liga = leagueId || '0';
@@ -371,21 +359,15 @@ class ApiService {
       anzahl
     });
 
-    if (Array.isArray(response)) {
-      // The exact structure depends on the API response
-      // For now, return the raw response and we can format it later
-      return response;
-    }
-
-    return [];
+    return this.asTable(response);
   }
 
-  async getFullPlayerStats(seasonId?: string, leagueId?: string, spieltagNr: number = 100): Promise<any[]> {
+  async getFullPlayerStats(seasonId?: string, leagueId?: string, spieltagNr: number = 100): Promise<Array<Record<string, string | number>>> {
     try {
       // Get the schnitt data from the API
       const schnittData = await this.getSchnitt(seasonId, leagueId, undefined, spieltagNr, 0, 1); // Increased from 1 to 20 to get more player results never to it again api Only works with one as parametre  
 
-        return schnittData.map((row: any[]) => ({
+        return schnittData.map((row) => ({
             rank: Number(row[0] || 0),       // Rank
             id: String(row[1] + '_' + row[0] || Math.random().toString()), // Unique ID combining name and rank
             name: String(row[1] || ''),      // Player
@@ -418,7 +400,7 @@ class ApiService {
     }
   }
 
-  async searchPlayers(query: string): Promise<any[]> {
+  async searchPlayers(query: string): Promise<Array<{ id: string; name: string; club: string; type: string }>> {
     // Make request to the server-side API route
     const formData = new URLSearchParams({
       command: 'SearchPlayers', // Using a custom command for player search
@@ -465,7 +447,7 @@ class ApiService {
     }
   }
 
-  async generateAdminSpielbericht(payload: SpielberichtRequest): Promise<any> {
+  async generateAdminSpielbericht(payload: SpielberichtRequest): Promise<Record<string, unknown>> {
     const response = await fetch('/api/admin/spielbericht', {
       method: 'POST',
       headers: {

@@ -1,2 +1,5 @@
-adding button when in röumer to say that all where hit
-a button to click if one made a 9 aka a strike.
+Erledigt:
+- Button im Räumen: "Fertig geräumt" speichert automatisch alle noch stehenden Kegel.
+- Button für 9 / Strike im Volle.
+- Mitschreiben-Modus für Trainer: Spieler auswählen, Session wird auf den Spieler gespeichert und Schreiber wird mitgespeichert.
+- Chat- und Umfrage-Funktionalität entfernt.

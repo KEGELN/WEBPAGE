@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Menubar from '@/components/menubar';
 import { db, Player, Throw, Trainer, TrainingSession } from '@/lib/db';
-import { ArrowLeft, Check, CircleOff, Save, Trophy, Hash } from 'lucide-react';
+import { ArrowLeft, Check, CircleOff, Save, Trophy, Hash, Sparkles } from 'lucide-react';
 
 const pinLayout = [
   { id: 9, x: 2, y: 0 },
@@ -48,6 +48,12 @@ function getScore(throws: Throw[]) {
   return throws.reduce((acc, throwItem) => acc + throwItem.pins.length, 0);
 }
 
+function getTrainerAuth(): Trainer | null {
+  if (typeof window === 'undefined') return null;
+  const trainerAuth = localStorage.getItem('trainer_user');
+  return trainerAuth ? JSON.parse(trainerAuth) as Trainer : null;
+}
+
 function getTrainingPlayer(): Player | null {
   if (typeof window === 'undefined') return null;
 
@@ -78,9 +84,14 @@ function getTrainingPlayer(): Player | null {
 export default function TrainingSessionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [player] = useState<Player | null>(() => {
-    return getTrainingPlayer();
-  });
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const authPlayer = useMemo(() => (isMounted ? getTrainingPlayer() : null), [isMounted]);
+  const trainerAuth = useMemo(() => (isMounted ? getTrainerAuth() : null), [isMounted]);
+  const [player, setPlayer] = useState<Player | null>(null);
   const [selectedPins, setSelectedPins] = useState<number[]>([]);
   const [quickCount, setQuickCount] = useState('');
   const [standardThrows, setStandardThrows] = useState<Throw[]>([]);
@@ -97,10 +108,52 @@ export default function TrainingSessionPage() {
     : standardThrows.length;
   const disabledPins = useMemo(() => getDisabledPins(activeThrows), [activeThrows]);
   const isComplete = mode === 'game_120' ? totalThrows >= 120 : totalThrows >= THROWS_PER_BLOCK;
+  const targetPlayerId = searchParams.get('playerId') ?? '';
+  const isRecordingForAnotherPlayer = Boolean(trainerAuth && targetPlayerId && authPlayer && targetPlayerId !== authPlayer.id);
+  const isClearingPhase = getThrowLabel(totalThrows) === 'Abräumen';
+  const remainingPins = isClearingPhase
+    ? pinLayout.map((pin) => pin.id).filter((pin) => !disabledPins.includes(pin))
+    : pinLayout.map((pin) => pin.id);
 
   useEffect(() => {
-    if (!player) router.push('/login');
-  }, [player, router]);
+    if (!isMounted) return;
+    if (!authPlayer) {
+      router.push('/login');
+      return;
+    }
+
+    if (!isRecordingForAnotherPlayer) {
+      setPlayer(authPlayer);
+      return;
+    }
+
+    if (!trainerAuth) {
+      router.push('/training');
+      return;
+    }
+
+    let cancelled = false;
+
+    db.getPlayers(trainerAuth.email)
+      .then((players) => {
+        if (cancelled) return;
+        const targetPlayer = players.find((candidate) => candidate.id === targetPlayerId) ?? null;
+        if (!targetPlayer) {
+          router.push('/training');
+          return;
+        }
+        setPlayer(targetPlayer);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Failed to load target training player:', error);
+        router.push('/training');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authPlayer, isMounted, isRecordingForAnotherPlayer, router, targetPlayerId, trainerAuth]);
 
   useEffect(() => {
     setSelectedPins((current) => current.filter((pin) => !disabledPins.includes(pin)));
@@ -164,15 +217,48 @@ export default function TrainingSessionPage() {
     setQuickCount('');
   };
 
+  const saveSpecificPinsThrow = (pins: number[]) => {
+    if (isComplete || pins.length === 0) return;
+
+    const nextThrow: Throw = {
+      id: Date.now(),
+      pins: [...pins].sort((a, b) => a - b),
+      timestamp: new Date().toISOString(),
+    };
+
+    if (mode === 'game_120') {
+      setLanes((current) => ({
+        ...current,
+        [activeLane]: [...current[activeLane], nextThrow],
+      }));
+    } else {
+      setStandardThrows((current) => [...current, nextThrow]);
+    }
+
+    setSelectedPins([]);
+    setQuickCount('');
+  };
+
+  const saveStrike = () => {
+    saveSpecificPinsThrow(pinLayout.map((pin) => pin.id));
+  };
+
+  const saveClearedLane = () => {
+    saveSpecificPinsThrow(remainingPins);
+  };
+
   const saveSession = async () => {
     if (!player || totalThrows === 0 || isSaving) return;
 
     const session: TrainingSession = {
       id: `session_${Date.now()}`,
       playerId: player.id,
+      playerName: player.name,
       trainerEmail: player.trainerEmail,
       timestamp: new Date().toISOString(),
       type: mode,
+      recorderId: isRecordingForAnotherPlayer ? trainerAuth?.email : undefined,
+      recorderName: isRecordingForAnotherPlayer ? trainerAuth?.name : undefined,
       throws: mode === 'standard' ? standardThrows : [],
       lanes: mode === 'game_120' ? lanes : undefined,
     };
@@ -191,7 +277,7 @@ export default function TrainingSessionPage() {
     ? laneKeys.reduce((acc, lane) => acc + getScore(lanes[lane]), 0)
     : getScore(standardThrows);
 
-  if (!player) return null;
+  if (!isMounted || !player) return null;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -215,6 +301,11 @@ export default function TrainingSessionPage() {
                 : `${totalThrows}/30 Würfe · ${getThrowLabel(totalThrows)}`
               }
             </p>
+            {isRecordingForAnotherPlayer && trainerAuth && (
+              <p className="text-sm text-primary">
+                Mitschreiben für {player?.name} · Schreiber: {trainerAuth.name}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-3 sm:min-w-[320px]">
@@ -223,7 +314,7 @@ export default function TrainingSessionPage() {
               <div className="mt-1 text-sm font-semibold">{player.name}</div>
             </div>
             <div className="rounded-2xl border border-border bg-muted/40 p-4">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Pins</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Holz</div>
               <div className="mt-1 text-2xl font-black">{sessionTotal}</div>
             </div>
             <div className="rounded-2xl border border-border bg-muted/40 p-4">
@@ -305,6 +396,28 @@ export default function TrainingSessionPage() {
               >
                 Auswahl löschen
               </button>
+              {isClearingPhase ? (
+                <button
+                  onClick={saveClearedLane}
+                  disabled={remainingPins.length === 0 || isComplete}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/15 disabled:opacity-50"
+                >
+                  <Sparkles size={16} />
+                  Fertig geräumt
+                </button>
+              ) : (
+                <button
+                  onClick={saveStrike}
+                  disabled={isComplete}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
+                >
+                  <Sparkles size={16} />
+                  9 / Strike
+                </button>
+              )}
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <button
                 onClick={() => saveThrow(true)}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/15"

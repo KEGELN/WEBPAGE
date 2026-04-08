@@ -22,6 +22,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -39,6 +40,10 @@ UA = (
 )
 
 
+def log(level: str, message: str) -> None:
+    print(f"[{level}] {message}")
+
+
 @dataclass
 class PlayerRow:
     place: int
@@ -51,6 +56,7 @@ class PlayerRow:
 
 
 def fetch_text(url: str, referer: str | None = None) -> str:
+    log("fetch", f"GET html {url}")
     req = Request(
         url,
         headers={
@@ -61,10 +67,13 @@ def fetch_text(url: str, referer: str | None = None) -> str:
         },
     )
     with urlopen(req, timeout=30) as res:
-        return res.read().decode("utf-8", errors="replace")
+        body = res.read().decode("utf-8", errors="replace")
+    log("fetch", f"GET html ok {url} bytes={len(body)}")
+    return body
 
 
 def fetch_bytes(url: str, referer: str | None = None) -> bytes:
+    log("fetch", f"GET pdf {url}")
     req = Request(
         url,
         headers={
@@ -74,7 +83,9 @@ def fetch_bytes(url: str, referer: str | None = None) -> bytes:
         },
     )
     with urlopen(req, timeout=45) as res:
-        return res.read()
+        body = res.read()
+    log("fetch", f"GET pdf ok {url} bytes={len(body)}")
+    return body
 
 
 def extract_pdf_links(html: str, base_url: str) -> list[tuple[str, str]]:
@@ -243,12 +254,14 @@ def parse_spieltag_hint(file_name: str, text: str) -> str | None:
 
 
 def extract_text_with_poppler(pdf_path: Path) -> str:
+    log("parse", f"pdftotext {pdf_path.name}")
     result = subprocess.run(
         ["pdftotext", "-raw", str(pdf_path), "-"],
         check=True,
         capture_output=True,
         text=True,
     )
+    log("parse", f"pdftotext ok {pdf_path.name} chars={len(result.stdout)}")
     return result.stdout
 
 
@@ -268,25 +281,39 @@ def build_league(league: str, root: Path) -> None:
     league_dir.mkdir(parents=True, exist_ok=True)
 
     page_url = LEAGUE_PDF_PAGES[league]
+    log("league", f"start {league} page={page_url}")
     html = fetch_text(page_url, referer="https://kleeblatt-berlin.de/")
     links = extract_pdf_links(html, page_url)
+    log("league", f"{league} discovered {len(links)} pdf links")
 
     entries: list[dict[str, object]] = []
+    success_count = 0
+    failure_count = 0
     with tempfile.TemporaryDirectory(prefix=f"kegel-{league}-") as tmp:
         tmp_dir = Path(tmp)
-        for pdf_url, title in links:
+        for index, (pdf_url, title) in enumerate(links, start=1):
+            started_at = time.monotonic()
             file_name = Path(urlparse(pdf_url).path).name or "report.pdf"
             safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", file_name)
             pdf_path = tmp_dir / safe_name
+            log("report", f"{league} [{index}/{len(links)}] start file={safe_name} title={title!r}")
 
             try:
                 data = fetch_bytes(pdf_url, referer=page_url)
                 pdf_path.write_bytes(data)
+                log("report", f"{league} [{index}/{len(links)}] saved tmp pdf={pdf_path}")
                 text = extract_text_with_poppler(pdf_path)
                 rows = parse_player_rows(text)
                 csv_name = f"{Path(safe_name).stem}.csv"
                 csv_path = league_dir / csv_name
                 write_csv(csv_path, rows)
+                duration = time.monotonic() - started_at
+                success_count += 1
+                spieltag_hint = parse_spieltag_hint(safe_name, text)
+                log(
+                    "report",
+                    f"{league} [{index}/{len(links)}] wrote {csv_name} rows={len(rows)} spieltag={spieltag_hint or '-'} duration={duration:.2f}s"
+                )
 
                 entries.append(
                     {
@@ -294,11 +321,14 @@ def build_league(league: str, root: Path) -> None:
                         "title": title,
                         "pdf_url": pdf_url,
                         "csv_file": csv_name,
-                        "spieltag": parse_spieltag_hint(safe_name, text),
+                        "spieltag": spieltag_hint,
                         "row_count": len(rows),
                     }
                 )
             except Exception as exc:  # noqa: BLE001
+                duration = time.monotonic() - started_at
+                failure_count += 1
+                log("error", f"{league} [{index}/{len(links)}] failed file={safe_name} duration={duration:.2f}s error={exc}")
                 entries.append(
                     {
                         "id": safe_name,
@@ -313,7 +343,10 @@ def build_league(league: str, root: Path) -> None:
 
     index_path = league_dir / "index.json"
     index_path.write_text(json.dumps({"league": league, "reports": entries}, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[{league}] wrote {index_path} with {len(entries)} reports")
+    log(
+        "league",
+        f"done {league} reports={len(entries)} ok={success_count} failed={failure_count} index={index_path}"
+    )
 
 
 def main() -> None:
@@ -332,8 +365,10 @@ def main() -> None:
 
     root = Path(args.root).resolve()
     leagues = ["berlinliga", "vereinsliga"] if args.league == "all" else [args.league]
+    log("run", f"root={root} leagues={','.join(leagues)}")
     for league in leagues:
         build_league(league, root)
+    log("run", "completed")
 
 
 if __name__ == "__main__":

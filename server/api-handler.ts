@@ -1,5 +1,4 @@
 // server/api-handler.ts
-import { unstable_cache } from 'next/cache';
 
 interface Season {
   season_id: string;
@@ -56,11 +55,6 @@ function parseGermanNumber(val: string | number): number {
 }
 
 class APIHandler {
-  private static readonly inFlightByCacheKey = new Map<string, Promise<any[][]>>();
-  private static readonly lastGoodByCacheKey = new Map<string, { data: any[][]; at: number }>();
-  private static readonly commandCooldownUntil = new Map<string, number>();
-  private static readonly COMMAND_COOLDOWN_MS = 60_000;
-
   private readonly SPORTWINNER_API_URL =
     process.env.SPORTWINNER_API_URL ||
     "https://skvb.sportwinner.de/php/skvb/service.php";
@@ -248,7 +242,7 @@ class APIHandler {
 
   async handleCommand(command: string, params: Record<string, any>): Promise<any[][]> {
     const fetchFromApi = async (cmd: string, p: Record<string, any>) => {
-      console.log(`Executing external API call for ${cmd}`); // Log to verify cache miss
+      console.log(`Executing external API call for ${cmd}`);
       const body = new URLSearchParams({ command: cmd });
 
       Object.entries(p).forEach(([k, v]) => {
@@ -276,70 +270,25 @@ class APIHandler {
         const json = await res.json();
         return Array.isArray(json) ? json : [];
       } catch (error) {
-        if (this.isTimeoutLikeError(error)) {
-          APIHandler.commandCooldownUntil.set(cmd, Date.now() + APIHandler.COMMAND_COOLDOWN_MS);
-        }
         console.warn(`Sportwinner fetch failed for ${cmd}:`, error);
         return [];
       }
     };
 
-    // Create a cache key based on the command and params
-    // We sort keys to ensure purely order-independent caching for the same params
-    const sortedParams = Object.keys(params).sort().reduce((acc, key) => {
-      acc[key] = params[key];
-      return acc;
-    }, {} as Record<string, any>);
-
-    const cacheKey = `sportwinner-${command}-${JSON.stringify(sortedParams)}`;
-    const now = Date.now();
-    const cooldownUntil = APIHandler.commandCooldownUntil.get(command) || 0;
-
-    if (cooldownUntil > now) {
-      const stale = APIHandler.lastGoodByCacheKey.get(cacheKey)?.data;
-      if (stale) return stale;
+    try {
+      const result = (await fetchFromApi(command, params)) as any[][];
+      if (Array.isArray(result)) {
+        return result;
+      }
+      return [];
+    } catch (error) {
+      if (this.isTimeoutLikeError(error)) {
+        console.warn(`Sportwinner timeout for ${command}:`, error);
+      }
       const fallback = this.getFallbackData(command);
       if (fallback) return fallback;
       return [];
     }
-
-    const inFlight = APIHandler.inFlightByCacheKey.get(cacheKey);
-    if (inFlight) return inFlight;
-
-    // Use unstable_cache to cache the result
-    // Revalidating every 3600 seconds (1 hour) as requested
-    const getCachedResult = unstable_cache(
-      async () => fetchFromApi(command, params),
-      [command, JSON.stringify(sortedParams)], // Key parts
-      { revalidate: 3600, tags: ['sportwinner'] }
-    );
-
-    const promise = (async () => {
-      try {
-        const result = (await getCachedResult()) as any[][];
-        if (Array.isArray(result)) {
-          APIHandler.lastGoodByCacheKey.set(cacheKey, { data: result, at: Date.now() });
-        }
-        if (Array.isArray(result) && result.length > 0) {
-          APIHandler.commandCooldownUntil.delete(command);
-        }
-        return Array.isArray(result) ? result : [];
-      } catch (error) {
-        if (this.isTimeoutLikeError(error)) {
-          APIHandler.commandCooldownUntil.set(command, Date.now() + APIHandler.COMMAND_COOLDOWN_MS);
-        }
-        const stale = APIHandler.lastGoodByCacheKey.get(cacheKey)?.data;
-        if (stale) return stale;
-        const fallback = this.getFallbackData(command);
-        if (fallback) return fallback;
-        return [];
-      } finally {
-        APIHandler.inFlightByCacheKey.delete(cacheKey);
-      }
-    })();
-
-    APIHandler.inFlightByCacheKey.set(cacheKey, promise);
-    return promise;
   }
 }
 

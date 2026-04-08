@@ -64,6 +64,14 @@
       "csv_file": "VL2526-08.csv",
       "spieltag": "8",
       "row_count": 52
+    },
+    {
+      "id": "VL2526-09.pdf",
+      "title": "VL2526-09.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2026/03/VL2526-09.pdf",
+      "csv_file": "VL2526-09.csv",
+      "spieltag": "9",
+      "row_count": 0
     }
   ]
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Menubar from '@/components/menubar';
 import PlayerService from '@/lib/player-service';
@@ -24,7 +24,7 @@ export default function PlayerClient() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
-  const playerService = new PlayerService();
+  const playerService = useMemo(() => new PlayerService(), []);
 
   useEffect(() => {
     if (!playerId) return;
@@ -45,7 +45,7 @@ export default function PlayerClient() {
     };
 
     fetchData();
-  }, [playerId]);
+  }, [playerId, playerService]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Menubar from '@/components/menubar';
 import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { useTheme } from '@/lib/theme-context';
 
 interface SeasonOption {
   season_id: string;
@@ -144,6 +145,7 @@ async function fetchLeagueGames(seasonId: string, seasonLabel: string, league: L
 
 export default function LivePage() {
   const apiService = ApiService.getInstance();
+  const { expertMode } = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allLiveGames, setAllLiveGames] = useState<LiveGame[]>([]);
@@ -287,10 +289,12 @@ export default function LivePage() {
                   <div className="text-xs text-muted-foreground">Liga</div>
                   <div className="font-semibold">{selectedGame.leagueName}</div>
                 </div>
-                <div className="rounded-lg border border-border p-3">
-                  <div className="text-xs text-muted-foreground">Spiel-ID</div>
-                  <div className="font-semibold">{selectedGame.gameId}</div>
-                </div>
+                {expertMode && (
+                  <div className="rounded-lg border border-border p-3">
+                    <div className="text-xs text-muted-foreground">Spiel-ID</div>
+                    <div className="font-semibold">{selectedGame.gameId}</div>
+                  </div>
+                )}
                 <div className="rounded-lg border border-border p-3">
                   <div className="text-xs text-muted-foreground">Spieltag</div>
                   <div className="font-semibold">{selectedGame.spieltag || '-'}</div>

@@ -3,10 +3,11 @@
 import Image from 'next/image';
 import logo from '@/images/logo.png';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Menu, X, UserCircle2, LogOut } from 'lucide-react';
+import { Search, Menu, X, UserCircle2, LogOut, ChevronDown } from 'lucide-react';
 import { ThemeSelector } from '@/components/ThemeToggle';
+import { useTheme } from '@/lib/theme-context';
 
 type AccountState =
   | { kind: 'trainer'; label: string }
@@ -43,10 +44,20 @@ function getInitialAccount(): AccountState {
 
 export default function Menubar() {
   const router = useRouter();
+  const { expertMode, toggleExpertMode } = useTheme();
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
-  const [account, setAccount] = useState<AccountState>(() => getInitialAccount());
+  const [isTrainingMenuOpen, setIsTrainingMenuOpen] = useState(false);
+  const [isMobileTrainingMenuOpen, setIsMobileTrainingMenuOpen] = useState(false);
+  const [account, setAccount] = useState<AccountState>({ kind: 'anonymous', label: 'Account' });
+
+  const visibleAccount = isMounted ? getInitialAccount() : account;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,12 +110,34 @@ export default function Menubar() {
             <Link href="/berlin" className="hover:text-primary transition-colors duration-200 font-medium">
               Berlin
             </Link>
-            <Link href="/training" className="hover:text-primary transition-colors duration-200 font-medium">
-              Training
-            </Link>
-            <Link href="/trainer/login" className="hover:text-primary transition-colors duration-200 font-medium">
-              Trainer
-            </Link>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsTrainingMenuOpen((prev) => !prev)}
+                className="inline-flex items-center gap-1 font-medium transition-colors duration-200 hover:text-primary"
+              >
+                Training
+                <ChevronDown className={`h-4 w-4 transition-transform ${isTrainingMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isTrainingMenuOpen && (
+                <div className="absolute left-0 top-full mt-2 w-52 rounded-2xl border border-border bg-card p-2 shadow-xl">
+                  <Link
+                    href="/training"
+                    onClick={() => setIsTrainingMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm hover:bg-muted"
+                  >
+                    Training Home
+                  </Link>
+                  <Link
+                    href="/trainer/login"
+                    onClick={() => setIsTrainingMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm hover:bg-muted"
+                  >
+                    Trainer Login
+                  </Link>
+                </div>
+              )}
+            </div>
                   </div>
 
                   {/* Search Bar and Account Menu (Desktop) */}
@@ -134,14 +167,14 @@ export default function Menubar() {
                           className="flex items-center gap-2 rounded-full border border-border px-3 py-2 text-sm hover:bg-muted"
                         >
                           <UserCircle2 className="h-5 w-5" />
-                          <span className="max-w-[140px] truncate">{account.label}</span>
+                          <span className="max-w-[140px] truncate">{visibleAccount.label}</span>
                         </button>
 
                         {isAccountMenuOpen && (
                           <div className="absolute right-0 mt-2 w-72 rounded-2xl border border-border bg-card p-3 shadow-xl">
                             <div className="mb-3 border-b border-border pb-3">
                               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Account</div>
-                              <div className="mt-1 text-sm font-semibold">{account.label}</div>
+                              <div className="mt-1 text-sm font-semibold">{visibleAccount.label}</div>
                             </div>
 
                             <div className="space-y-1 border-b border-border pb-3">
@@ -160,7 +193,20 @@ export default function Menubar() {
                               <ThemeSelector />
                             </div>
 
-                            {account.kind !== 'anonymous' && (
+                            <div className="border-t border-border pt-3">
+                              <button
+                                type="button"
+                                onClick={toggleExpertMode}
+                                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-muted"
+                              >
+                                <span>Expert Mode</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${expertMode ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                                  {expertMode ? 'An' : 'Aus'}
+                                </span>
+                              </button>
+                            </div>
+
+                            {visibleAccount.kind !== 'anonymous' && (
                               <button
                                 type="button"
                                 onClick={handleLogout}
@@ -205,7 +251,7 @@ export default function Menubar() {
                                   type="text"
                                   value={searchQuery}
                                   onChange={(e) => setSearchQuery(e.target.value)}
-                                  placeholder="Search clubs, players..."
+                                  placeholder="Search players, leagues..."
                                   className="w-full py-3.5 px-4 pr-12 rounded-lg bg-muted text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:bg-accent shadow-md"
                               />
                               <button
@@ -260,20 +306,47 @@ export default function Menubar() {
               >
                 Berlin
               </Link>
-              <Link
-                href="/training"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="block px-4 py-2 hover:bg-muted rounded-md transition-colors font-medium"
-              >
-                Training
-              </Link>
+              <div className="rounded-md border border-border/60">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileTrainingMenuOpen((prev) => !prev)}
+                  className="flex w-full items-center justify-between px-4 py-2 font-medium transition-colors hover:bg-muted"
+                >
+                  <span>Training</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isMobileTrainingMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isMobileTrainingMenuOpen && (
+                  <div className="border-t border-border/60 py-1">
+                    <Link
+                      href="/training"
+                      onClick={() => {
+                        setIsMobileTrainingMenuOpen(false);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="block px-6 py-2 text-sm hover:bg-muted"
+                    >
+                      Training Home
+                    </Link>
+                    <Link
+                      href="/trainer/login"
+                      onClick={() => {
+                        setIsMobileTrainingMenuOpen(false);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="block px-6 py-2 text-sm hover:bg-muted"
+                    >
+                      Trainer Login
+                    </Link>
+                  </div>
+                )}
+              </div>
                       </div>
                   </div>
               )}
 
               {isAccountMenuOpen && (
                 <div className="mt-4 md:hidden rounded-2xl border border-border bg-card p-4 shadow-md">
-                  <div className="mb-3 text-sm font-semibold">{account.label}</div>
+                  <div className="mb-3 text-sm font-semibold">{visibleAccount.label}</div>
                   <div className="space-y-1 border-b border-border pb-3">
                     <Link href="/training" onClick={() => setIsAccountMenuOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-muted">
                       Player Area
@@ -288,7 +361,19 @@ export default function Menubar() {
                   <div className="py-3">
                     <ThemeSelector />
                   </div>
-                  {account.kind !== 'anonymous' && (
+                  <div className="border-t border-border pt-3">
+                    <button
+                      type="button"
+                      onClick={toggleExpertMode}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-muted"
+                    >
+                      <span>Expert Mode</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${expertMode ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                        {expertMode ? 'An' : 'Aus'}
+                      </span>
+                    </button>
+                  </div>
+                  {visibleAccount.kind !== 'anonymous' && (
                     <button
                       type="button"
                       onClick={handleLogout}

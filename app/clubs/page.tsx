@@ -1,9 +1,11 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import Menubar from '@/components/menubar';
 import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { useTheme } from '@/lib/theme-context';
 
 interface Season {
   season_id: string;
@@ -412,8 +414,8 @@ async function retryAsync<T>(worker: () => Promise<T>, attempts = 3, delayMs = 2
 }
 
 export default function ClubsPage() {
+  const { expertMode } = useTheme();
   const apiService = ApiService.getInstance();
-  const MAX_SEASONS_TO_SCAN = 20;
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2240,7 +2242,7 @@ export default function ClubsPage() {
                                             <th className="px-2 py-2 text-left">Datum</th>
                                             <th className="px-2 py-2 text-left">Liga</th>
                                             <th className="px-2 py-2 text-left">Spieltag</th>
-                                            <th className="px-2 py-2 text-left">Game ID</th>
+                                            {expertMode && <th className="px-2 py-2 text-left">Game ID</th>}
                                             <th className="px-2 py-2 text-left">Ort</th>
                                             <th className="px-2 py-2 text-left">Gegner</th>
                                             <th className="px-2 py-2 text-center">Kegel</th>
@@ -2259,7 +2261,7 @@ export default function ClubsPage() {
                                               <td className="px-2 py-2">{game.dateTime || '-'}</td>
                                               <td className="px-2 py-2">{game.leagueName || '-'}</td>
                                               <td className="px-2 py-2">{game.spieltag || '-'}</td>
-                                              <td className="px-2 py-2 font-mono text-[11px]">{game.gameId || '-'}</td>
+                                              {expertMode && <td className="px-2 py-2 font-mono text-[11px]">{game.gameId || '-'}</td>}
                                               <td className="px-2 py-2">{game.isHome ? 'Heim' : 'Auswärts'}</td>
                                               <td className="px-2 py-2">{game.opponent || '-'}</td>
                                               <td
@@ -2393,9 +2395,11 @@ export default function ClubsPage() {
                 </div>
                 {playerImageDataUrl && (
                   <div className="mt-3">
-                    <img
+                    <Image
                       src={playerImageDataUrl}
                       alt="Player upload preview"
+                      width={320}
+                      height={160}
                       className="max-h-40 rounded-lg border border-border object-cover"
                     />
                   </div>
@@ -2633,7 +2637,7 @@ export default function ClubsPage() {
                       <th className="px-3 py-2 text-left">Liga</th>
                       <th className="px-3 py-2 text-left">Spieltag</th>
                       <th className="px-3 py-2 text-left">Datum</th>
-                      <th className="px-3 py-2 text-left">Game ID</th>
+                      {expertMode && <th className="px-3 py-2 text-left">Game ID</th>}
                       <th className="px-3 py-2 text-left">Ort</th>
                       <th className="px-3 py-2 text-left">Heim</th>
                       <th className="px-3 py-2 text-left">Auswärts</th>
@@ -2654,7 +2658,7 @@ export default function ClubsPage() {
                             <td className="px-3 py-2">{entry.leagueName}</td>
                             <td className="px-3 py-2">{entry.game.spieltag || '-'}</td>
                             <td className="px-3 py-2">{entry.game.date_time || '-'}</td>
-                            <td className="px-3 py-2 font-mono text-xs">{entry.game.game_id || '-'}</td>
+                            {expertMode && <td className="px-3 py-2 font-mono text-xs">{entry.game.game_id || '-'}</td>}
                             <td className="px-3 py-2">{entry.isHome ? 'Heim' : 'Auswärts'}</td>
                             <td className="px-3 py-2">{entry.game.team_home || '-'}</td>
                             <td className="px-3 py-2">{entry.game.team_away || '-'}</td>

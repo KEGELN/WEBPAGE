@@ -1,82 +1,92 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Menubar from '@/components/menubar';
 import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
+type SearchResult = {
+  id: string;
+  type: string;
+  name: string;
+  description: string;
+};
+
 export default function SearchClient() {
   const searchParams = useSearchParams();
   const searchTerm = searchParams.get('q') || '';
 
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apiService = ApiService.getInstance();
+  const apiService = useMemo(() => ApiService.getInstance(), []);
 
   useEffect(() => {
-    if (searchTerm) {
-      performSearch(searchTerm);
+    if (!searchTerm) {
+      setResults([]);
+      return;
     }
-  }, [searchTerm]);
 
-  const performSearch = async (query: string) => {
-    setLoading(true);
-    setError(null);
+    const performSearch = async () => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const [clubs, districts, leagues, players] = await Promise.all([
-        apiService.searchClubs(query),
-        apiService.getDistricts(),
-        apiService.getLeagues(),
-        apiService.searchPlayers(query)
-      ]);
+      try {
+        const [clubs, districts, leagues, players] = await Promise.all([
+          apiService.searchClubs(searchTerm),
+          apiService.getDistricts(),
+          apiService.getLeagues(),
+          apiService.searchPlayers(searchTerm)
+        ]);
 
-      const filteredDistricts = districts.filter(district =>
-        district.name_des_bezirks.toLowerCase().includes(query.toLowerCase())
-      );
+        const filteredDistricts = districts.filter(district =>
+          district.name_des_bezirks.toLowerCase().includes(searchTerm.toLowerCase())
+        );
 
-      const filteredLeagues = leagues.filter(league =>
-        league.name_der_liga.toLowerCase().includes(query.toLowerCase())
-      );
+        const filteredLeagues = leagues.filter(league =>
+          league.name_der_liga.toLowerCase().includes(searchTerm.toLowerCase())
+        );
 
-      const formattedResults = [
-        ...clubs.map(club => ({
-          id: club.nr_club,
-          type: 'Club',
-          name: club.name_klub,
-          description: 'Kegel club'
-        })),
-        ...players.map(player => ({
-          id: player.id,
-          type: 'Player',
-          name: player.name,
-          description: `Player at ${player.club}`
-        })),
-        ...filteredDistricts.map(district => ({
-          id: district.bezirk_id,
-          type: 'District',
-          name: district.name_des_bezirks,
-          description: 'Region for kegel sport'
-        })),
-        ...filteredLeagues.map(league => ({
-          id: league.liga_id,
-          type: 'League',
-          name: league.name_der_liga,
-          description: league.kontakt_name ? `Contact: ${league.kontakt_name}` : 'Kegel league'
-        }))
-      ];
+        const formattedResults: SearchResult[] = [
+          ...clubs.map(club => ({
+            id: club.nr_club,
+            type: 'Club',
+            name: club.name_klub,
+            description: 'Kegel club'
+          })),
+          ...players.map(player => ({
+            id: player.id,
+            type: 'Player',
+            name: player.name,
+            description: `Player at ${player.club}`
+          })),
+          ...filteredDistricts.map(district => ({
+            id: district.bezirk_id,
+            type: 'District',
+            name: district.name_des_bezirks,
+            description: 'Region for kegel sport'
+          })),
+          ...filteredLeagues.map(league => ({
+            id: league.liga_id,
+            type: 'League',
+            name: league.name_der_liga,
+            description: league.kontakt_name ? `Contact: ${league.kontakt_name}` : 'Kegel league'
+          }))
+        ];
 
-      setResults(formattedResults);
-    } catch (err) {
-      setError('Failed to perform search. Please try again.');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+        setResults(formattedResults);
+      } catch (err) {
+        setError('Failed to perform search. Please try again.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void performSearch();
+  }, [apiService, searchTerm]);
 
   const [filter, setFilter] = useState<'all' | 'clubs' | 'players' | 'leagues'>('all');
 
@@ -174,7 +184,7 @@ export default function SearchClient() {
         {!loading && !error && filteredResults.length === 0 && searchTerm && (
           <div className="text-center py-12">
             <p className="text-lg text-muted-foreground">
-              No {filter !== 'all' ? filter : ''} results found for "{searchTerm}"
+              No {filter !== 'all' ? filter : ''} results found for &quot;{searchTerm}&quot;
             </p>
           </div>
         )}

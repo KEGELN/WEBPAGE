@@ -1,10 +1,10 @@
 'use client';
 
-import { Fragment, useState, useEffect } from 'react';
+import { Fragment, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
-import { History, LogOut, Play, Trophy, BarChart3, FileDown, ArrowRight, TrendingUp, FileText, MessageSquare, Users } from 'lucide-react';
-import { Club, Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
+import { History, LogOut, Play, Trophy, BarChart3, FileDown, ArrowRight, TrendingUp, FileText, MessageSquare, ClipboardPenLine } from 'lucide-react';
+import { Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
 
 type DetailedThrowRow = {
   sessionId: string;
@@ -107,30 +107,58 @@ function getTrainingPlayer(): Player | null {
 
 export default function TrainingHomePage() {
   const router = useRouter();
-  const [player] = useState<Player | null>(() => {
-    return getTrainingPlayer();
-  });
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const player = useMemo(() => (isMounted ? getTrainingPlayer() : null), [isMounted]);
+  const trainer = useMemo(() => {
+    if (!isMounted || typeof window === 'undefined') {
+      return null;
+    }
+    const trainerAuth = localStorage.getItem('trainer_user');
+    return trainerAuth ? JSON.parse(trainerAuth) as Trainer : null;
+  }, [isMounted]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [messages, setMessages] = useState<TrainerMessage[]>([]);
-  const [clubs, setClubs] = useState<Club[]>([]);
+  const [managedPlayers, setManagedPlayers] = useState<Player[]>([]);
+  const [recordForPlayerId, setRecordForPlayerId] = useState('');
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isMounted) return;
     if (!player) {
       router.push('/login');
       return;
     }
 
+    let cancelled = false;
+
     Promise.all([
       db.getSessions({ playerId: player.id }),
       db.getTrainerMessages({ playerId: player.id }),
-      db.getClubs({ memberType: 'player', memberId: player.id }),
-    ]).then(([nextSessions, nextMessages, nextClubs]) => {
-      setSessions(nextSessions);
-      setMessages(nextMessages);
-      setClubs(nextClubs);
-    });
-  }, [player, router]);
+      trainer ? db.getPlayers(trainer.email) : Promise.resolve([]),
+    ])
+      .then(([nextSessions, nextMessages, nextManagedPlayers]) => {
+        if (cancelled) return;
+        setSessions(nextSessions);
+        setMessages(nextMessages);
+        setManagedPlayers(nextManagedPlayers);
+        setRecordForPlayerId((current) => current || nextManagedPlayers[0]?.id || '');
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Failed to load training home data:', error);
+        setSessions([]);
+        setMessages([]);
+        setManagedPlayers([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isMounted, player, router, trainer]);
 
   const handleLogout = () => {
     localStorage.removeItem('player_auth');
@@ -144,6 +172,14 @@ export default function TrainingHomePage() {
         acc + lane.reduce((lacc, t) => lacc + (t.pins?.length || 0), 0), 0);
     }
     return s.throws?.reduce((acc, t) => acc + (t.pins?.length || 0), 0) || 0;
+  };
+
+  const startSession = (mode: 'standard' | 'game_120', targetPlayerId?: string) => {
+    const params = new URLSearchParams({ mode });
+    if (targetPlayerId) {
+      params.set('playerId', targetPlayerId);
+    }
+    router.push(`/training/session?${params.toString()}`);
   };
 
   const exportToCSV = () => {
@@ -258,7 +294,7 @@ export default function TrainingHomePage() {
     popup.print();
   };
 
-  if (!player) return null;
+  if (!isMounted || !player) return null;
 
   const graphSessions = sessions.slice(0, 10).reverse();
   const graphTotals = graphSessions.map((s) => getSessionTotal(s));
@@ -281,7 +317,9 @@ export default function TrainingHomePage() {
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold">Gut Holz, {player.name.split(',')[0]}!</h1>
-              <p className="text-muted-foreground text-sm mt-1">Willkommen in deinem Trainings-Center.</p>
+              <p className="text-muted-foreground text-sm mt-1">
+                {trainer ? 'Selbst trainieren oder für einen Spieler mitschreiben.' : 'Willkommen in deinem Trainings-Center.'}
+              </p>
             </div>
           </div>
           <div className="flex gap-3">
@@ -369,7 +407,7 @@ export default function TrainingHomePage() {
           <h2 className="text-xl font-bold px-1">Training starten</h2>
           <div className="grid gap-6 sm:grid-cols-2">
             <button 
-              onClick={() => router.push('/training/session?mode=standard')}
+              onClick={() => startSession('standard')}
               className="group bg-card hover:border-primary transition-all p-8 rounded-3xl border border-border shadow-sm text-left flex items-center justify-between"
             >
               <div className="space-y-2">
@@ -383,7 +421,7 @@ export default function TrainingHomePage() {
             </button>
 
             <button 
-              onClick={() => router.push('/training/session?mode=game_120')}
+              onClick={() => startSession('game_120')}
               className="group bg-card hover:border-primary transition-all p-8 rounded-3xl border border-border shadow-sm text-left flex items-center justify-between"
             >
               <div className="space-y-2">
@@ -398,7 +436,50 @@ export default function TrainingHomePage() {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-2">
+        {trainer && managedPlayers.length > 0 && (
+          <section className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-bold">
+                  <ClipboardPenLine size={20} className="text-primary" />
+                  Mitschreiben Modus
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Wähle einen Spieler. Die Session landet auf dessen Konto und wird mit dir als Schreiber markiert.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto_auto]">
+              <select
+                value={recordForPlayerId}
+                onChange={(event) => setRecordForPlayerId(event.target.value)}
+                className="rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                {managedPlayers.map((managedPlayer) => (
+                  <option key={managedPlayer.id} value={managedPlayer.id}>
+                    {managedPlayer.name} ({managedPlayer.id})
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => startSession('standard', recordForPlayerId)}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-semibold hover:bg-muted"
+              >
+                <Play size={16} />
+                Standard mitschreiben
+              </button>
+              <button
+                onClick={() => startSession('game_120', recordForPlayerId)}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-semibold hover:bg-muted"
+              >
+                <Trophy size={16} />
+                120 mitschreiben
+              </button>
+            </div>
+          </section>
+        )}
+
+        <section>
           <div className="bg-card rounded-3xl border border-border p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2">
@@ -421,38 +502,6 @@ export default function TrainingHomePage() {
                       </div>
                     </div>
                     <p className="mt-2 text-sm leading-6">{message.text}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="bg-card rounded-3xl border border-border p-6 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                <Users size={20} className="text-primary" />
-                Club-Bereich
-              </h2>
-              <button
-                onClick={() => router.push('/training/club')}
-                className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted"
-              >
-                Öffnen
-                <ArrowRight size={16} />
-              </button>
-            </div>
-            <div className="mt-4 space-y-3">
-              {clubs.length === 0 ? (
-                <div className="rounded-2xl border-2 border-dashed border-border p-6 text-sm text-muted-foreground">
-                  Du bist noch in keinem Club. Öffne den Club-Bereich mit einem Einladungslink eines Trainers.
-                </div>
-              ) : (
-                clubs.map((club) => (
-                  <div key={club.id} className="rounded-2xl border border-border bg-muted/20 p-4">
-                    <div className="text-sm font-semibold">{club.name}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      Einladungscode: {club.inviteToken}
-                    </div>
                   </div>
                 ))
               )}
@@ -504,6 +553,11 @@ export default function TrainingHomePage() {
                           <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${s.type === 'game_120' ? 'bg-amber-500/10 text-amber-600' : 'bg-blue-500/10 text-blue-600'}`}>
                             {s.type === 'game_120' ? '120 Würfe' : '30 Würfe'}
                           </span>
+                          {s.recorderName && (
+                            <div className="mt-1 text-[10px] text-muted-foreground">
+                              Schreiber: {s.recorderName}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-center font-bold text-lg">{total}</td>
                         <td className="px-6 py-4 text-center text-sm font-mono">{avg}</td>

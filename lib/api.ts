@@ -40,7 +40,7 @@ export async function getSeasons(): Promise<Season[]> {
 
     // The API returns results in a nested array format
     // Transform to proper objects based on API spec: [season_id, yearof_season, status]
-    return data.map((item: any[]) => ({
+    return data.map((item: unknown[]) => ({
       season_id: item[0],
       yearof_season: parseInt(item[1]),
       status: parseInt(item[2])
@@ -95,7 +95,7 @@ export async function searchClubs(query: string): Promise<ClubResult[]> {
     const data = await response.json();
 
     // The API returns results in format [ [id, nr_club, name_klub], ... ]
-    return data.map((item: any[]) => ({
+    return data.map((item: unknown[]) => ({
       id: item[0],
       nr_club: item[1],
       name_klub: item[2]
@@ -117,7 +117,8 @@ export async function searchClubs(query: string): Promise<ClubResult[]> {
  * Placeholder function for searching players
  * Currently returns empty results since the API doesn't have a player search function
  */
-export async function searchPlayers(query: string): Promise<PlayerResult[]> {
+export async function searchPlayers(_query: string): Promise<PlayerResult[]> {
+  void _query;
   // The API does not currently support player search in the documentation
   // Return empty array as placeholder for future implementation
   console.warn('Player search not implemented in the API yet');

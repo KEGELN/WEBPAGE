@@ -1,9 +1,9 @@
-import Link from 'next/link';
+import Image from 'next/image';
 
 export default function HomePage() {
   return (
     <>
-      <img src="/app/images/test1.png" alt="Test image" className="max-w-full h-auto" />
+      <Image src="/app/images/test1.png" alt="Test image" width={1200} height={800} className="max-w-full h-auto" />
     </>
   );
 }

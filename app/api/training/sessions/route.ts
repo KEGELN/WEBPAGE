@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { TrainingSession } from '@/lib/db';
 import { serverDb } from '@/lib/server-db';
 
 export async function GET(request: NextRequest) {
@@ -8,10 +9,10 @@ export async function GET(request: NextRequest) {
   
   let sessions = serverDb.getSessions();
   if (playerId) {
-    sessions = sessions.filter((s: any) => s.playerId === playerId);
+    sessions = sessions.filter((s: TrainingSession) => s.playerId === playerId);
   }
   if (trainerEmail) {
-    sessions = sessions.filter((s: any) => s.trainerEmail === trainerEmail);
+    sessions = sessions.filter((s: TrainingSession) => s.trainerEmail === trainerEmail);
   }
   
   return NextResponse.json(sessions);
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
     const saved = serverDb.saveSession(session);
     return NextResponse.json(saved);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 }

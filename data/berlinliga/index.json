@@ -88,6 +88,22 @@
       "csv_file": "BlnL_2526-09.csv",
       "spieltag": "9",
       "row_count": 46
+    },
+    {
+      "id": "BlnL_2526-10.pdf",
+      "title": "BlnL_2526-10.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2026/03/BlnL_2526-10.pdf",
+      "csv_file": "BlnL_2526-10.csv",
+      "spieltag": "10",
+      "row_count": 46
+    },
+    {
+      "id": "BlnL_2526-11.pdf",
+      "title": "BlnL_2526-11.pdf",
+      "pdf_url": "https://kleeblatt-berlin.de/wp-content/uploads/2026/03/BlnL_2526-11.pdf",
+      "csv_file": "BlnL_2526-11.csv",
+      "spieltag": "11",
+      "row_count": 19
     }
   ]
 }

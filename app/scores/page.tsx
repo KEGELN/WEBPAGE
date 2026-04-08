@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Menubar from '@/components/menubar';
 import PlayerService from '@/lib/player-service';
@@ -8,26 +8,60 @@ import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { readDefaultLeagueId } from '@/lib/client-settings';
 
+type PlayerRow = {
+  rank?: number;
+  name?: string;
+  club?: string;
+  category?: string;
+  gamesTotal?: number | string;
+  totalGames?: number | string;
+  games?: number | string;
+  avgTotal?: string;
+  average?: string;
+  schnitt?: string;
+  mpTotal?: number | string;
+  points?: number | string;
+  gamesHome?: number | string;
+  homeGames?: number | string;
+  avgHome?: string;
+  homeAverage?: string;
+  mpHome?: number | string;
+  homePoints?: number | string;
+  gamesAway?: number | string;
+  awayGames?: number | string;
+  avgAway?: string;
+  awayAverage?: string;
+  mpAway?: number | string;
+  awayPoints?: number | string;
+  bestGame?: number | string;
+  best?: number | string;
+};
+
+type SeasonOption = { season_id: string; yearof_season: number; status: number };
+type LeagueOption = { liga_id: string; name_der_liga: string };
+type SpieltagOption = { id: string; nr: string; label: string; status: string };
+type StandingRow = Array<string | number | null | undefined>;
+
 export default function ScoresPage() {
   const router = useRouter();
-  const [players, setPlayers] = useState<any[]>([]);
+  const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<string>('');
   const [selectedLeague, setSelectedLeague] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [spieltage, setSpieltage] = useState<any[]>([]);
+  const [spieltage, setSpieltage] = useState<SpieltagOption[]>([]);
   const [selectedSpieltag, setSelectedSpieltag] = useState<string>('100');
-  const [seasons, setSeasons] = useState<any[]>([]);
-  const [leagues, setLeagues] = useState<any[]>([]);
+  const [seasons, setSeasons] = useState<SeasonOption[]>([]);
+  const [leagues, setLeagues] = useState<LeagueOption[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
-  const [standings, setStandings] = useState<any[]>([]);
+  const [standings, setStandings] = useState<StandingRow[]>([]);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [standingsSort, setStandingsSort] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
-  const playerService = new PlayerService();
-  const apiService = ApiService.getInstance();
+  const playerService = useMemo(() => new PlayerService(), []);
+  const apiService = useMemo(() => ApiService.getInstance(), []);
 
   useEffect(() => {
     const fetchFilters = async () => {
@@ -91,14 +125,20 @@ export default function ScoresPage() {
       try {
         const data = await apiService.getSpieltage(selectedSeason, selectedLeague);
         setSpieltage(data);
-        setSelectedSpieltag('100');
+        setSelectedSpieltag((prev) => {
+          if (prev === '100') return prev;
+          const hasPrevious = data.some((entry) => String(entry.nr) === String(prev));
+          return hasPrevious ? prev : '100';
+        });
       } catch (err) {
         console.error('Error fetching spieltage:', err);
+        setSpieltage([]);
+        setSelectedSpieltag('100');
       }
     };
 
     fetchSpieltage();
-  }, [selectedSeason, selectedLeague]);
+  }, [apiService, selectedSeason, selectedLeague]);
 
   useEffect(() => {
     if (players && players.length > 0) {
@@ -107,13 +147,13 @@ export default function ScoresPage() {
     }
   }, [players]);
 
-  const displayValue = (value: any) => {
+  const displayValue = (value: unknown) => {
     if (value === null || value === undefined) return '-';
     if (typeof value === 'number' && !Number.isFinite(value)) return '-';
     return value;
   };
 
-  const formatNumber = (value: any) => {
+  const formatNumber = (value: unknown) => {
     if (value === null || value === undefined) return '-';
     const asNumber = typeof value === 'number' ? value : Number(String(value).replace(',', '.'));
     if (!Number.isFinite(asNumber)) return '-';
@@ -160,7 +200,7 @@ export default function ScoresPage() {
     };
 
     fetchData();
-  }, [selectedSeason, selectedLeague, selectedSpieltag]);
+  }, [playerService, selectedSeason, selectedLeague, selectedSpieltag]);
 
   useEffect(() => {
     const fetchStandings = async () => {
@@ -169,21 +209,28 @@ export default function ScoresPage() {
       try {
         const spieltagNr = Number(selectedSpieltag);
         const data = await apiService.getStandingsRaw(selectedLeague, selectedSeason, spieltagNr, 0);
-        setStandings(data);
+        if (data.length > 0 || selectedSpieltag === '100') {
+          setStandings(data);
+        } else {
+          const fallback = await apiService.getStandingsRaw(selectedLeague, selectedSeason, 100, 0);
+          setStandings(fallback);
+        }
       } catch (err) {
         console.error('Error fetching standings:', err);
+        setStandings([]);
       } finally {
         setStandingsLoading(false);
       }
     };
 
     fetchStandings();
-  }, [selectedSeason, selectedLeague, selectedSpieltag]);
+  }, [apiService, selectedSeason, selectedLeague, selectedSpieltag]);
 
   const sortedPlayers = [...players].sort((a, b) => {
     if (!sortConfig) return 0;
 
-    let aValue: any, bValue: any;
+    let aValue: string | number = 0;
+    let bValue: string | number = 0;
     switch (sortConfig.key) {
       case 'rank':
         aValue = a.rank || 0;
@@ -368,7 +415,7 @@ export default function ScoresPage() {
               >
                 <option value="100">Aktuell (100)</option>
                 {spieltage.length === 0 && <option value="">Keine Spieltage</option>}
-                {spieltage.map((spieltag: any) => (
+                {spieltage.map((spieltag) => (
                   <option key={spieltag.id} value={spieltag.nr}>
                     {spieltag.label}{spieltag.status === '1' ? ' (Aktuell)' : ''}
                   </option>
@@ -404,7 +451,7 @@ export default function ScoresPage() {
                 (() => {
                   const sortedStandings = [...standings].sort((a, b) => {
                     if (!standingsSort) return 0;
-                    const getValue = (row: any[]) => {
+                    const getValue = (row: StandingRow) => {
                       switch (standingsSort.key) {
                         case 'position':
                           return Number(row[1] || 0);

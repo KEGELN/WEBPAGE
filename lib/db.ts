@@ -22,9 +22,12 @@ export interface Throw {
 export interface TrainingSession {
   id: string;
   playerId: string;
+  playerName?: string;
   trainerEmail: string;
   timestamp: string;
   type: 'standard' | 'game_120';
+  recorderId?: string;
+  recorderName?: string;
   throws: Throw[];
   lanes?: {
     1: Throw[];

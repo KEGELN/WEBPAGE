@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
-import { UserPlus, Users, Trash2, ChevronRight, BarChart3, LogOut, Search, User, History, Plus, ArrowLeft, MessageSquare, Send, Link2, ShieldPlus } from 'lucide-react';
-import { Club, Throw, Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
+import { UserPlus, Users, Trash2, ChevronRight, BarChart3, LogOut, Search, User, History, Plus, ArrowLeft, MessageSquare, Send } from 'lucide-react';
+import { Throw, Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
 
 export default function TrainerDashboard() {
   const router = useRouter();
@@ -12,11 +12,8 @@ export default function TrainerDashboard() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [messages, setMessages] = useState<TrainerMessage[]>([]);
-  const [clubs, setClubs] = useState<Club[]>([]);
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newMessage, setNewMessage] = useState('');
-  const [newClubName, setNewClubName] = useState('');
-  const [clubMemberInputs, setClubMemberInputs] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedSession, setSelectedSession] = useState<TrainingSession | null>(null);
@@ -37,16 +34,14 @@ export default function TrainerDashboard() {
   const refreshData = async (email: string) => {
     setLoading(true);
     try {
-      const [allPlayers, allSessions, allMessages, allClubs] = await Promise.all([
+      const [allPlayers, allSessions, allMessages] = await Promise.all([
         db.getPlayers(email),
         db.getSessions({ trainerEmail: email }),
         db.getTrainerMessages({ trainerEmail: email }),
-        db.getClubs({ trainerEmail: email }),
       ]);
       setPlayers(allPlayers);
       setSessions(allSessions);
       setMessages(allMessages);
-      setClubs(allClubs.map((club) => ({ ...club, allowedPlayerIds: club.allowedPlayerIds ?? [] })));
     } catch (error) {
       console.error("Failed to refresh data:", error);
     } finally {
@@ -100,32 +95,6 @@ export default function TrainerDashboard() {
     });
     setNewMessage('');
     await refreshData(trainer.email);
-  };
-
-  const createClub = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!trainer || !newClubName.trim()) return;
-
-    await db.createClub({
-      name: newClubName.trim(),
-      ownerTrainerEmail: trainer.email,
-      ownerName: trainer.name,
-    });
-    setNewClubName('');
-    await refreshData(trainer.email);
-  };
-
-  const copyInviteLink = async (inviteToken: string) => {
-    const url = `${window.location.origin}/training/club?invite=${inviteToken}`;
-    await navigator.clipboard.writeText(url);
-  };
-
-  const addClubMember = async (clubId: string) => {
-    const value = (clubMemberInputs[clubId] || '').trim().toUpperCase();
-    if (!value) return;
-    await db.addClubMember({ clubId, playerId: value });
-    setClubMemberInputs((current) => ({ ...current, [clubId]: '' }));
-    if (trainer) await refreshData(trainer.email);
   };
 
   const resetTempPassword = async (playerId: string) => {
@@ -254,80 +223,6 @@ export default function TrainerDashboard() {
                   Spieler erstellen
                 </button>
               </form>
-            </div>
-
-            <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
-              <h2 className="text-base font-bold mb-4 flex items-center gap-2">
-                <ShieldPlus size={18} className="text-primary" />
-                Club anlegen
-              </h2>
-              <form onSubmit={createClub} className="space-y-3">
-                <input
-                  type="text"
-                  value={newClubName}
-                  onChange={(e) => setNewClubName(e.target.value)}
-                  placeholder="Clubname"
-                  className="w-full bg-muted border border-border rounded-xl py-2.5 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="w-full bg-primary text-primary-foreground font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity text-sm flex items-center justify-center gap-2"
-                >
-                  <Plus size={18} />
-                  Club erstellen
-                </button>
-              </form>
-              <div className="mt-4 space-y-2">
-                {clubs.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">Noch keine Clubs erstellt.</div>
-                ) : (
-                  clubs.map((club) => (
-                    <div key={club.id} className="rounded-xl border border-border bg-muted/30 p-3">
-                      <div className="text-sm font-semibold">{club.name}</div>
-                      <div className="mt-1 text-[10px] text-muted-foreground uppercase">Code {club.inviteToken}</div>
-                      <div className="mt-2 text-[10px] text-muted-foreground">
-                        Freigegebene IDs: {(club.allowedPlayerIds ?? []).length > 0 ? (club.allowedPlayerIds ?? []).join(', ') : 'noch keine'}
-                      </div>
-                      <div className="mt-3 flex gap-2">
-                        <input
-                          type="text"
-                          value={clubMemberInputs[club.id] || ''}
-                          onChange={(e) =>
-                            setClubMemberInputs((current) => ({ ...current, [club.id]: e.target.value.toUpperCase() }))
-                          }
-                          placeholder="Spieler-ID"
-                          className="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary/40"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => addClubMember(club.id)}
-                          className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted"
-                        >
-                          ID hinzufügen
-                        </button>
-                      </div>
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => copyInviteLink(club.inviteToken)}
-                          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted"
-                        >
-                          <Link2 size={14} />
-                          Link kopieren
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/training/club?invite=${club.inviteToken}`)}
-                          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted"
-                        >
-                          Öffnen
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
             </div>
 
             <div className="bg-card rounded-2xl border border-border p-5 shadow-sm overflow-hidden flex flex-col h-[500px] lg:h-[600px]">

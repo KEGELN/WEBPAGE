@@ -75,10 +75,10 @@ export async function POST(request: NextRequest) {
     console.log(`API call intercepted for command: ${command}`, Object.fromEntries(params));
 
     // Use the API handler to process the command
-    let result: any[];
+    let result: unknown[][];
 
     const baseParams = Object.fromEntries(params);
-    delete (baseParams as any).command;
+    delete baseParams.command;
 
     switch(command) {
       case 'GetSaisonArray':
@@ -162,15 +162,15 @@ export async function POST(request: NextRequest) {
     }
 
     return Response.json(result);
-  } catch (error: any) {
-    const status = Number(error?.status);
-    const message = String(error?.message || 'Unknown error');
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string };
+    const status = Number(err?.status);
+    const message = String(err?.message || 'Unknown error');
     if (status === 403 || status === 429 || message.includes('HTTP error 403') || message.includes('HTTP error 429')) {
       console.warn('Upstream blocked request, returning empty result:', message);
       return Response.json([]);
     }
     console.error('Error processing API request:', message);
-    // Return error that can trigger a popup on the frontend
     return Response.json({ error: message }, { status: 500 });
   }
 }
@@ -194,10 +194,10 @@ export async function GET(request: NextRequest) {
 
   try {
     // Use the API handler to process the command
-    let result: any[];
+    let result: unknown[][];
 
     const baseParams = Object.fromEntries(searchParams);
-    delete (baseParams as any).command;
+    delete baseParams.command;
 
     switch(command) {
       case 'GetSaisonArray':
@@ -280,15 +280,15 @@ export async function GET(request: NextRequest) {
     }
 
     return Response.json(result);
-  } catch (error: any) {
-    const status = Number(error?.status);
-    const message = String(error?.message || 'Unknown error');
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string };
+    const status = Number(err?.status);
+    const message = String(err?.message || 'Unknown error');
     if (status === 403 || status === 429 || message.includes('HTTP error 403') || message.includes('HTTP error 429')) {
       console.warn('Upstream blocked request, returning empty result:', message);
       return Response.json([]);
     }
     console.error('Error processing API request:', message);
-    // Return error that can trigger a popup on the frontend
     return Response.json({ error: message }, { status: 500 });
   }
 }

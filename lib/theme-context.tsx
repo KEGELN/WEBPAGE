@@ -8,6 +8,8 @@ interface ThemeContextType {
   theme: ThemeName;
   toggleTheme: () => void;
   setTheme: (theme: ThemeName) => void;
+  expertMode: boolean;
+  toggleExpertMode: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -17,6 +19,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') return 'default';
     const savedTheme = localStorage.getItem('theme') as ThemeName | null;
     return savedTheme || 'default';
+  });
+  const [expertMode, setExpertMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('expert_mode') === 'true';
   });
 
   useEffect(() => {
@@ -33,6 +39,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  useEffect(() => {
+    localStorage.setItem('expert_mode', expertMode ? 'true' : 'false');
+  }, [expertMode]);
+
   const setTheme = (nextTheme: ThemeName) => {
     setThemeState(nextTheme);
   };
@@ -45,8 +55,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const toggleExpertMode = () => {
+    setExpertMode((current) => !current);
+  };
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme, expertMode, toggleExpertMode }}>
       {children}
     </ThemeContext.Provider>
   );

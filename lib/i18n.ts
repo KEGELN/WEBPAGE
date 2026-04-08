@@ -8,6 +8,7 @@ import deTranslations from '@/translations/de.json';
 
 type Language = 'en' | 'de';
 type Translations = typeof enTranslations;
+type TranslationValue = string | { [key: string]: TranslationValue };
 
 const translations: Record<Language, Translations> = {
   en: enTranslations,
@@ -42,7 +43,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const t = (key: string, fallback?: string): string => {
     const keys = key.split('.');
-    let value: any = translations[language];
+    let value: TranslationValue | undefined = translations[language] as TranslationValue;
 
     for (const k of keys) {
       if (value && typeof value === 'object') {
@@ -58,7 +59,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
 
     if (language !== 'en') {
-      value = translations['en'];
+      value = translations['en'] as TranslationValue;
       for (const k of keys) {
         if (value && typeof value === 'object') {
           value = value[k];

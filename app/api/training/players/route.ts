@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Player } from '@/lib/db';
 import { serverDb } from '@/lib/server-db';
 
 export async function GET(request: NextRequest) {
@@ -7,7 +8,7 @@ export async function GET(request: NextRequest) {
   
   let players = serverDb.getPlayers();
   if (trainerEmail) {
-    players = players.filter((p: any) => p.trainerEmail === trainerEmail);
+    players = players.filter((p: Player) => p.trainerEmail === trainerEmail);
   }
   
   return NextResponse.json(players);
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
     const saved = serverDb.savePlayer(player);
     return NextResponse.json(saved);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 }

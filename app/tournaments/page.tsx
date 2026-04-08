@@ -1,12 +1,13 @@
 'use client';
 
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Menubar from '@/components/menubar';
 import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { parseDateTimeString } from '@/lib/date-parser';
 import { readDefaultLeagueId } from '@/lib/client-settings';
+import { useTheme } from '@/lib/theme-context';
 
 interface SpielplanGame {
   spieltag: string;
@@ -27,14 +28,18 @@ interface SeasonOption {
 
 interface LeagueOption {
   liga_id: string;
+  wertung?: string;
   name_der_liga: string;
 }
 
-interface SpieltagOption {
-  id: string;
-  nr: string;
-  label: string;
+interface RawGameOption {
+  game_id: string;
+  spiel_datum: string;
+  spiel_uhrzeit: string;
+  team1_name: string;
+  team2_name: string;
   status: string;
+  additional_info: string;
 }
 
 type GameDetailCell = string | number | null | undefined;
@@ -104,9 +109,31 @@ function extractDateOnly(value: string): string {
   return dateMatch ? dateMatch[0].trim() : text.replace(/\s*[-|]?\s*\d{1,2}:\d{2}.*$/, '').trim();
 }
 
+function mapGamesToSpielplanEntries(games: RawGameOption[]): SpielplanGame[] {
+  return games.map((game) => {
+    const scoreMatch = String(game.additional_info || '').match(/(\d+(?:[.,]\d+)?)\s*:\s*(\d+(?:[.,]\d+)?)/);
+    const pointsHome = scoreMatch?.[1] ?? '';
+    const pointsAway = scoreMatch?.[2] ?? '';
+    const result = pointsHome && pointsAway ? `${pointsHome} : ${pointsAway}` : String(game.status || '-');
+
+    return {
+      spieltag: '',
+      game_id: String(game.game_id || ''),
+      game_nr: '',
+      date_time: [game.spiel_datum, game.spiel_uhrzeit].filter(Boolean).join(' ').trim(),
+      team_home: String(game.team1_name || ''),
+      team_away: String(game.team2_name || ''),
+      result,
+      points_home: pointsHome,
+      points_away: pointsAway,
+    };
+  });
+}
+
 function TournamentsPageContent() {
   const apiService = ApiService.getInstance();
   const searchParams = useSearchParams();
+  const { expertMode } = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [spiele, setSpiele] = useState<SpielplanGame[]>([]);
@@ -124,6 +151,22 @@ function TournamentsPageContent() {
   const [lastLiveSync, setLastLiveSync] = useState<Date | null>(null);
 
   const appliedQueryTeamRef = useRef(false);
+
+  const loadPlanData = useCallback(async (seasonId: string, leagueId: string) => {
+    const [planData, spieltagData] = await Promise.all([
+      apiService.getSpielplan(seasonId, leagueId),
+      apiService.getSpieltage(seasonId, leagueId),
+    ]);
+
+    const normalizedPlan = planData.length > 0
+      ? planData
+      : mapGamesToSpielplanEntries((await apiService.getGames(seasonId, leagueId, '0')) as RawGameOption[]);
+
+    return {
+      planData: normalizedPlan,
+      spieltagData,
+    };
+  }, [apiService]);
 
   useEffect(() => {
     const fetchFilters = async () => {
@@ -207,18 +250,15 @@ function TournamentsPageContent() {
       setError(null);
 
       try {
-        const [planData, spieltagData] = await Promise.all([
-          apiService.getSpielplan(selectedSeason, selectedLeague),
-          apiService.getSpieltage(selectedSeason, selectedLeague),
-        ]);
-        setSpiele(planData as SpielplanGame[]);
+        const { planData, spieltagData } = await loadPlanData(selectedSeason, selectedLeague);
+        setSpiele(planData);
         setGameDetails({});
         setDetailsLoading({});
         setGameNotes({});
         setOpenGameId(null);
 
         const map: Record<string, string> = {};
-        (spieltagData as SpieltagOption[]).forEach((entry) => {
+        spieltagData.forEach((entry) => {
           map[entry.label] = entry.id;
         });
         setSpieltagMap(map);
@@ -231,7 +271,7 @@ function TournamentsPageContent() {
     };
 
     fetchData();
-  }, [apiService, selectedSeason, selectedLeague]);
+  }, [loadPlanData, selectedSeason, selectedLeague]);
 
   useEffect(() => {
     if (!selectedSeason || !selectedLeague) return;
@@ -239,14 +279,11 @@ function TournamentsPageContent() {
 
     const refreshPlan = async () => {
       try {
-        const [planData, spieltagData] = await Promise.all([
-          apiService.getSpielplan(selectedSeason, selectedLeague),
-          apiService.getSpieltage(selectedSeason, selectedLeague),
-        ]);
+        const { planData, spieltagData } = await loadPlanData(selectedSeason, selectedLeague);
         if (cancelled) return;
-        setSpiele(planData as SpielplanGame[]);
+        setSpiele(planData);
         const map: Record<string, string> = {};
-        (spieltagData as SpieltagOption[]).forEach((entry) => {
+        spieltagData.forEach((entry) => {
           map[entry.label] = entry.id;
         });
         setSpieltagMap(map);
@@ -262,7 +299,7 @@ function TournamentsPageContent() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [apiService, livePollingMinutes, selectedLeague, selectedSeason]);
+  }, [livePollingMinutes, loadPlanData, selectedLeague, selectedSeason]);
 
   useEffect(() => {
     if (appliedQueryTeamRef.current || spiele.length === 0) return;
@@ -321,6 +358,11 @@ function TournamentsPageContent() {
     if (!selectedTeam) return spiele;
     return spiele.filter((game) => isTeamGame(game, selectedTeam));
   }, [selectedTeam, spiele]);
+
+  const selectedLeagueConfig = useMemo(
+    () => leagues.find((league) => String(league.liga_id) === String(selectedLeague)) ?? null,
+    [leagues, selectedLeague]
+  );
 
   const sortedTeamGames = useMemo(() => {
     if (!selectedTeam) return [] as SpielplanGame[];
@@ -392,7 +434,8 @@ function TournamentsPageContent() {
     if (gameDetails[gameId]) return;
     setDetailsLoading((prev) => ({ ...prev, [gameId]: true }));
     try {
-      const data = await apiService.getSpielerInfo(selectedSeason, gameId, 1);
+      const wertung = Number(selectedLeagueConfig?.wertung || '1') || 1;
+      const data = await apiService.getSpielerInfo(selectedSeason, gameId, wertung);
       setGameDetails((prev) => ({ ...prev, [gameId]: data }));
     } catch (err) {
       console.error('Error fetching game details:', err);
@@ -925,7 +968,7 @@ function TournamentsPageContent() {
                       <thead className="bg-muted/70">
                         <tr>
                           <th className="py-3 px-4 text-left text-foreground">Datum/Zeit</th>
-                          <th className="py-3 px-4 text-left text-foreground">Game ID</th>
+                          {expertMode && <th className="py-3 px-4 text-left text-foreground">Game ID</th>}
                           <th className="py-3 px-4 text-left text-foreground">Heim</th>
                           <th className="py-3 px-4 text-left text-foreground">Gast</th>
                           <th className="py-3 px-4 text-left text-foreground">Ergebnis</th>
@@ -934,7 +977,7 @@ function TournamentsPageContent() {
                       <tbody>
                         {rows.map((spiel, idx) => {
                           const isOpen = openGameId === spiel.game_id;
-                          const score = parseResultScore(spiel.result);
+                          const score = parseResultScore(`${spiel.points_home} : ${spiel.points_away}`) ?? parseResultScore(spiel.result);
                           const pointDiff = score ? Math.abs(score.home - score.away) : null;
                           const leader = score
                             ? score.home > score.away
@@ -950,7 +993,9 @@ function TournamentsPageContent() {
                                 onClick={() => toggleGame(spiel.game_id)}
                               >
                                 <td className="py-3 px-4 whitespace-nowrap">{displayValue(spiel.date_time)}</td>
-                                <td className="py-3 px-4 whitespace-nowrap font-mono text-xs">{displayValue(spiel.game_id)}</td>
+                                {expertMode && (
+                                  <td className="py-3 px-4 whitespace-nowrap font-mono text-xs">{displayValue(spiel.game_id)}</td>
+                                )}
                                 <td className="py-3 px-4 min-w-[10rem]">{displayValue(spiel.team_home)}</td>
                                 <td className="py-3 px-4 min-w-[10rem]">{displayValue(spiel.team_away)}</td>
                                 <td className="py-3 px-4 whitespace-nowrap">
@@ -965,7 +1010,7 @@ function TournamentsPageContent() {
                               </tr>
                               {isOpen && (
                                 <tr key={`${spiel.game_id}-details`}>
-                                  <td colSpan={5} className="px-4 pb-4">
+                                  <td colSpan={expertMode ? 5 : 4} className="px-4 pb-4">
                                     {detailsLoading[spiel.game_id] && (
                                       <LoadingSpinner label="Loading game results..." className="py-6" size="sm" />
                                     )}

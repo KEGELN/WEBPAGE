@@ -3,26 +3,19 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
-import { Lock, UserCheck, AlertCircle, UserPlus2, Users } from 'lucide-react';
-import { db, GuestUser } from '@/lib/db';
+import { Lock, UserCheck, AlertCircle } from 'lucide-react';
+import { db } from '@/lib/db';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [tempPassword, setTempPassword] = useState('');
-  const [guestName, setGuestName] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
 
   useEffect(() => {
     const auth = localStorage.getItem('player_auth');
-    const guest = localStorage.getItem('guest_user');
     if (auth) {
       router.push('/training');
-      return;
-    }
-
-    if (guest) {
-      router.push('/training/club');
     }
   }, [router]);
 
@@ -40,23 +33,6 @@ export default function LoginPage() {
     } catch {
       setError('Verbindung zum Server fehlgeschlagen.');
     }
-  };
-
-  const startGuestMode = () => {
-    if (!guestName.trim()) {
-      setError('Für den Gastmodus wird ein Anzeigename benötigt.');
-      return;
-    }
-
-    const guest: GuestUser = {
-      id: `G-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
-      name: guestName.trim(),
-      tempCode: Math.random().toString(36).slice(2, 8).toUpperCase(),
-      role: 'guest',
-    };
-
-    localStorage.setItem('guest_user', JSON.stringify(guest));
-    router.push('/training/club');
   };
 
   return (
@@ -135,36 +111,6 @@ export default function LoginPage() {
             <p className="text-xs text-center text-muted-foreground">
               Username und Temp-Passwort erhältst du von deinem Trainer. Deine Trainingsdaten sind für deinen Trainer einsehbar.
             </p>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-muted/20 p-5">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Users size={16} className="text-primary" />
-              Gastmodus
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Für Club-Umfragen oder Chats ohne Spielerkonto.
-            </p>
-            <div className="mt-4 space-y-3">
-              <input
-                type="text"
-                value={guestName}
-                onChange={(e) => {
-                  setGuestName(e.target.value);
-                  setError('');
-                }}
-                placeholder="Dein Name"
-                className="w-full bg-background border border-border rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-              />
-              <button
-                type="button"
-                onClick={startGuestMode}
-                className="w-full bg-secondary text-secondary-foreground font-bold py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-              >
-                <UserPlus2 size={20} />
-                Als Gast weiter
-              </button>
-            </div>
           </div>
         </div>
       </main>

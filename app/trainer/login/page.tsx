@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
-import { Mail, LogIn, AlertCircle, Shield } from 'lucide-react';
+import { LogIn, AlertCircle, Shield } from 'lucide-react';
 import { db } from '@/lib/db';
 
 export default function TrainerLoginPage() {
