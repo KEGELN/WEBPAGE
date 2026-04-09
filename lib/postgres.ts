@@ -27,13 +27,8 @@ function createPool(connectionString: string) {
   const isVercel = process.env.VERCEL === '1';
   const isSupabase = connectionString.includes('supabase') || process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-  let finalConnectionString = connectionString;
-  if (isSupabase && !connectionString.includes('sslmode')) {
-    finalConnectionString = connectionString + (connectionString.includes('?') ? '&' : '?') + 'sslmode=require';
-  }
-
   const poolConfig: PoolConfig = {
-    connectionString: finalConnectionString,
+    connectionString,
     max: isVercel ? 2 : 5,
     idleTimeoutMillis: isVercel ? 10000 : 30000,
     connectionTimeoutMillis: isVercel ? 5000 : 10000,
