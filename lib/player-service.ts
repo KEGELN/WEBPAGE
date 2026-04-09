@@ -1,35 +1,51 @@
 // lib/player-service.ts
+
 import ApiService from './api-service';
 
-interface Player {
-  rank: number;
-  id: string;
-  name: string;
-  club?: string;
-  league?: string;
-  category?: string;
-  gamesTotal?: number;
-  avgTotal?: string;
-  mpTotal?: number;
-  gamesHome?: number;
-  avgHome?: string;
-  mpHome?: number;
-  gamesAway?: number;
-  avgAway?: string;
-  mpAway?: number;
-  bestGame?: number;
-  average?: string;
-  schnitt?: string;
+export interface PlayerHistoryEntry {
+  gameId: string;
+  date: string | null;
+  time: string | null;
+  league: string | null;
+  spieltag: string | null;
+  club: string | null;
+  opponentClub: string | null;
+  result: string | null;
+  teamResult: string | null;
+  holz: string | null;
+  sp: string | null;
+  mp: string | null;
+  side: 'home' | 'away';
 }
 
 interface PlayerStats {
-  playerId: string;
+  found: boolean;
   playerName: string;
   gamesPlayed: number;
   wins: number;
   losses: number;
-  averageScore?: number;
-  ranking?: number;
+  averageScore: number;
+  ranking?: number | null;
+  clubs?: string[];
+  history?: PlayerHistoryEntry[];
+}
+
+export interface SchnittPlayerRow {
+  rank?: number;
+  id?: string;
+  name?: string;
+  club?: string;
+  category?: string;
+  gamesTotal?: number | string;
+  avgTotal?: string;
+  mpTotal?: number | string;
+  gamesHome?: number | string;
+  avgHome?: string;
+  mpHome?: number | string;
+  gamesAway?: number | string;
+  avgAway?: string;
+  mpAway?: number | string;
+  bestGame?: number | string;
 }
 
 class PlayerService {
@@ -39,46 +55,27 @@ class PlayerService {
     this.apiService = ApiService.getInstance();
   }
 
-  async getPlayerSchnitliste(seasonId?: string, leagueId?: string, spieltagNr?: number): Promise<Player[]> {
+  async getPlayerSchnitliste(
+    seasonId?: string,
+    leagueId?: string,
+    spieltagNr?: number
+  ): Promise<SchnittPlayerRow[]> {
     try {
-      // Use the API service to get full player stats with season and league filters
-      const rawPlayerData = await this.apiService.getFullPlayerStats(seasonId, leagueId, spieltagNr);
-
-      // Return the raw data directly since the component expects the detailed stats format
-      return rawPlayerData as unknown as Player[];
+      const rows = await this.apiService.getFullPlayerStats(seasonId, leagueId, spieltagNr);
+      return rows as SchnittPlayerRow[];
     } catch (error) {
       console.error('Error fetching player list:', error);
-      throw error; // Re-throw the error instead of returning mock data
+      throw error;
     }
   }
 
-  async getPlayerStats(playerId: string): Promise<PlayerStats> {
-    try {
-      // Placeholder implementation - in a real scenario, you might need a specific API call
-      // for individual player stats
-      console.log('Fetching player stats for playerId:', playerId);
-      return {
-        playerId,
-        playerName: `Player ${playerId}`,
-        gamesPlayed: 0,
-        wins: 0,
-        losses: 0,
-        averageScore: 0,
-        ranking: parseInt(playerId) || 0
-      };
-    } catch (error) {
-      console.error('Error fetching player stats:', error);
-      // Return default player stats in case of error
-      return {
-        playerId,
-        playerName: `Player ${playerId}`,
-        gamesPlayed: 0,
-        wins: 0,
-        losses: 0,
-        averageScore: 0,
-        ranking: parseInt(playerId) || 0
-      };
+  async getPlayerStats(playerName: string): Promise<PlayerStats> {
+    const res = await fetch(`/api/mirror/player?name=${encodeURIComponent(playerName)}`);
+    const payload = (await res.json()) as PlayerStats;
+    if (!res.ok && res.status !== 404) {
+      throw new Error('Failed to fetch player profile');
     }
+    return payload;
   }
 }
 

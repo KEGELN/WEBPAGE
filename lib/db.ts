@@ -6,6 +6,7 @@
 export interface Player {
   id: string;
   name: string;
+  mirrorPlayerName?: string;
   trainerEmail: string;
   createdAt: string;
   username: string;
@@ -206,6 +207,15 @@ export const db = {
   savePlayer: async (player: Player) => {
     const res = await fetch('/api/training/players', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(player),
+    });
+    return res.json();
+  },
+
+  updatePlayer: async (player: Player) => {
+    const res = await fetch('/api/training/players', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(player),
     });

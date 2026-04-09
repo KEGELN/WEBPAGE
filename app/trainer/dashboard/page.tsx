@@ -3,8 +3,33 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
-import { UserPlus, Users, Trash2, ChevronRight, BarChart3, LogOut, Search, User, History, Plus, ArrowLeft, MessageSquare, Send } from 'lucide-react';
+import { UserPlus, Users, Trash2, ChevronRight, BarChart3, LogOut, Search, User, History, Plus, ArrowLeft, MessageSquare, Send, Trophy } from 'lucide-react';
 import { Throw, Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
+
+interface MirrorHistoryEntry {
+  gameId: string;
+  date: string | null;
+  time: string | null;
+  league: string | null;
+  spieltag: string | null;
+  club: string | null;
+  opponentClub: string | null;
+  result: string | null;
+  teamResult: string | null;
+  holz: string | null;
+  sp: string | null;
+  mp: string | null;
+}
+
+interface MirrorPlayerProfile {
+  found: boolean;
+  playerName: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  averageScore: number;
+  history?: MirrorHistoryEntry[];
+}
 
 export default function TrainerDashboard() {
   const router = useRouter();
@@ -17,6 +42,9 @@ export default function TrainerDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedSession, setSelectedSession] = useState<TrainingSession | null>(null);
+  const [mirrorPlayerNameInput, setMirrorPlayerNameInput] = useState('');
+  const [mirrorProfile, setMirrorProfile] = useState<MirrorPlayerProfile | null>(null);
+  const [mirrorLoading, setMirrorLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showMobileList, setShowMobileList] = useState(true);
 
@@ -107,7 +135,53 @@ export default function TrainerDashboard() {
   const selectPlayer = (player: Player) => {
     setSelectedPlayer(player);
     setSelectedSession(null);
+    setMirrorPlayerNameInput(player.mirrorPlayerName || '');
+    setMirrorProfile(null);
     setShowMobileList(false);
+  };
+
+  useEffect(() => {
+    if (!selectedPlayer?.mirrorPlayerName) {
+      setMirrorProfile(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadMirrorProfile = async () => {
+      setMirrorLoading(true);
+      try {
+        const res = await fetch(`/api/mirror/player?name=${encodeURIComponent(selectedPlayer.mirrorPlayerName || '')}`);
+        const payload = (await res.json()) as MirrorPlayerProfile;
+        if (!cancelled) {
+          setMirrorProfile(res.ok ? payload : payload.found ? payload : null);
+        }
+      } catch (error) {
+        console.error('Failed to load mirror player profile', error);
+        if (!cancelled) {
+          setMirrorProfile(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setMirrorLoading(false);
+        }
+      }
+    };
+
+    void loadMirrorProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPlayer?.id, selectedPlayer?.mirrorPlayerName]);
+
+  const assignMirrorPlayerName = async () => {
+    if (!selectedPlayer || !trainer) return;
+    const updatedPlayer: Player = {
+      ...selectedPlayer,
+      mirrorPlayerName: mirrorPlayerNameInput.trim() || undefined,
+    };
+    const saved = await db.updatePlayer(updatedPlayer);
+    setSelectedPlayer(saved);
+    await refreshData(trainer.email);
   };
 
   const filteredPlayers = players.filter(p => 
@@ -212,7 +286,7 @@ export default function TrainerDashboard() {
                   type="text"
                   value={newPlayerName}
                   onChange={(e) => setNewPlayerName(e.target.value)}
-                  placeholder="Name des Spielers"
+                  placeholder="Vollständiger Name des Spielers"
                   className="w-full bg-muted border border-border rounded-xl py-2.5 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
                   required
                 />
@@ -264,6 +338,11 @@ export default function TrainerDashboard() {
                       <div className="min-w-0">
                         <div className="font-bold text-sm truncate">{p.name}</div>
                         <div className="text-[10px] font-mono text-muted-foreground tracking-wider uppercase mt-0.5">ID: {p.id}</div>
+                        {p.mirrorPlayerName && (
+                          <div className="mt-1 text-[10px] text-muted-foreground truncate">
+                            Sportwinner: {p.mirrorPlayerName}
+                          </div>
+                        )}
                       </div>
                       <ChevronRight size={14} className={selectedPlayer?.id === p.id ? 'text-primary' : 'text-muted-foreground'} />
                     </button>
@@ -348,6 +427,31 @@ export default function TrainerDashboard() {
                       </button>
                     </div>
                   </div>
+                  <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Sportwinner-Zuordnung</div>
+                    <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end">
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs font-semibold text-foreground">Vollständiger Spielername</label>
+                        <input
+                          type="text"
+                          value={mirrorPlayerNameInput}
+                          onChange={(e) => setMirrorPlayerNameInput(e.target.value)}
+                          placeholder="z. B. Noack, Matthias"
+                          className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          Diese Zuordnung steuert, welche echten Sportwinner-Ergebnisse im Überblick angezeigt werden.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={assignMirrorPlayerName}
+                        className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
+                      >
+                        Zuordnung speichern
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Training History */}
@@ -407,6 +511,84 @@ export default function TrainerDashboard() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                <div className="bg-card rounded-2xl border border-border p-5 sm:p-8 shadow-sm">
+                  <h3 className="text-base font-bold mb-6 flex items-center gap-2">
+                    <Trophy size={18} className="text-primary" />
+                    Echte Spielergebnisse
+                  </h3>
+
+                  {!selectedPlayer.mirrorPlayerName ? (
+                    <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+                      Weise oben einen vollständigen Sportwinner-Spielernamen zu, damit die echten Ergebnisse geladen werden.
+                    </div>
+                  ) : mirrorLoading ? (
+                    <div className="text-sm text-muted-foreground">Lade Sportwinner-Ergebnisse...</div>
+                  ) : !mirrorProfile?.found ? (
+                    <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+                      Für {selectedPlayer.mirrorPlayerName} wurden noch keine gespiegelten Sportwinner-Daten gefunden.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+                          <div className="text-[10px] uppercase text-muted-foreground">Spiele</div>
+                          <div className="text-lg font-bold">{mirrorProfile.gamesPlayed}</div>
+                        </div>
+                        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+                          <div className="text-[10px] uppercase text-muted-foreground">Siege</div>
+                          <div className="text-lg font-bold">{mirrorProfile.wins}</div>
+                        </div>
+                        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+                          <div className="text-[10px] uppercase text-muted-foreground">Niederlagen</div>
+                          <div className="text-lg font-bold">{mirrorProfile.losses}</div>
+                        </div>
+                        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+                          <div className="text-[10px] uppercase text-muted-foreground">Ø Holz</div>
+                          <div className="text-lg font-bold">{mirrorProfile.averageScore}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3">
+                        {mirrorProfile.history?.slice(0, 6).map((entry) => (
+                          <div key={`${entry.gameId}-${entry.club}-${entry.date}`} className="rounded-xl border border-border bg-muted/20 p-4">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                              <div>
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                  {entry.spieltag || 'Spiel'} · {entry.league || 'Liga unbekannt'}
+                                </div>
+                                <div className="mt-1 font-semibold">
+                                  {entry.club} vs {entry.opponentClub}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {[entry.date, entry.time].filter(Boolean).join(' · ')}
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                <div className="rounded-lg border border-border bg-background px-3 py-2">
+                                  <div className="text-[10px] uppercase text-muted-foreground">Ergebnis</div>
+                                  <div className="font-semibold">{entry.result || entry.teamResult || '-'}</div>
+                                </div>
+                                <div className="rounded-lg border border-border bg-background px-3 py-2">
+                                  <div className="text-[10px] uppercase text-muted-foreground">Holz</div>
+                                  <div className="font-semibold">{entry.holz || '-'}</div>
+                                </div>
+                                <div className="rounded-lg border border-border bg-background px-3 py-2">
+                                  <div className="text-[10px] uppercase text-muted-foreground">SP</div>
+                                  <div className="font-semibold">{entry.sp || '-'}</div>
+                                </div>
+                                <div className="rounded-lg border border-border bg-background px-3 py-2">
+                                  <div className="text-[10px] uppercase text-muted-foreground">MP</div>
+                                  <div className="font-semibold">{entry.mp || '-'}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {selectedSession && (

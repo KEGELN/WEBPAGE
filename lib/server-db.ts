@@ -58,6 +58,7 @@ function buildUsername(name: string, id: string) {
 function normalizePlayer(raw: Omit<Player, 'username' | 'tempPassword' | 'passwordResetRequired'> & Partial<Player>): Player {
   return {
     ...raw,
+    mirrorPlayerName: raw.mirrorPlayerName || undefined,
     username: raw.username || buildUsername(raw.name, raw.id),
     tempPassword: raw.tempPassword || raw.id.slice(-6).toUpperCase(),
     passwordResetRequired: raw.passwordResetRequired ?? true,
@@ -118,6 +119,19 @@ export const serverDb = {
     db.players.push(normalizePlayer(player));
     writeDB(db);
     return db.players[db.players.length - 1];
+  },
+  updatePlayer: (player: Player) => {
+    const db = readDB();
+    const index = db.players.findIndex((entry) => entry.id === player.id);
+    if (index === -1) {
+      return null;
+    }
+    db.players[index] = normalizePlayer({
+      ...db.players[index],
+      ...player,
+    });
+    writeDB(db);
+    return db.players[index];
   },
   deletePlayer: (id: string) => {
     const db = readDB();

@@ -7,7 +7,8 @@
       "createdAt": "2026-03-30T12:47:53.785Z",
       "username": "janev0",
       "tempPassword": "GS1WOY",
-      "passwordResetRequired": true
+      "passwordResetRequired": true,
+      "mirrorPlayerName": "Rechenberger, Jan"
     },
     {
       "id": "P-HK92IR",
@@ -476,6 +477,11 @@
     {
       "email": "ksc@ksc.de",
       "name": "adminsdrojek42",
+      "role": "trainer"
+    },
+    {
+      "email": "test@gmail.com",
+      "name": "test",
       "role": "trainer"
     }
   ],

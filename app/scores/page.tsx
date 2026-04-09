@@ -309,7 +309,8 @@ export default function ScoresPage() {
     : sortedPlayers;
 
   const handlePlayerClick = (playerName: string) => {
-    router.push(`/search?q=${encodeURIComponent(playerName)}`);
+    if (!playerName) return;
+    router.push(`/player?name=${encodeURIComponent(playerName)}`);
   };
 
   const handleSort = (key: string) => {

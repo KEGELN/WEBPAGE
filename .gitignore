@@ -20,6 +20,7 @@ coverage/
 # env files (keep template tracked)
 .env*
 !.env.example
+# .env.local is excluded by .env* above - contains real credentials
 
 # generated local env from helper scripts
 .env.notifications

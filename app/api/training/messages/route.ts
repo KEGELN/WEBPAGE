@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serverDb } from '@/lib/server-db';
+import { getTrainingStore } from '@/lib/training-store';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const playerId = searchParams.get('playerId');
   const trainerEmail = searchParams.get('trainerEmail');
 
-  let messages = serverDb.getTrainerMessages();
+  let messages = await getTrainingStore().getTrainerMessages();
   if (playerId) {
     messages = messages.filter((message) => message.playerId === playerId);
   }
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const saved = serverDb.saveTrainerMessage({
+    const saved = await getTrainingStore().saveTrainerMessage({
       playerId: body.playerId,
       trainerEmail: body.trainerEmail,
       text: body.text.trim(),

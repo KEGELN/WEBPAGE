@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import Menubar from '@/components/menubar';
-import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 type SearchResult = {
@@ -21,8 +21,6 @@ export default function SearchClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apiService = useMemo(() => ApiService.getInstance(), []);
-
   useEffect(() => {
     if (!searchTerm) {
       setResults([]);
@@ -34,45 +32,27 @@ export default function SearchClient() {
       setError(null);
 
       try {
-        const [clubs, districts, leagues, players] = await Promise.all([
-          apiService.searchClubs(searchTerm),
-          apiService.getDistricts(),
-          apiService.getLeagues(),
-          apiService.searchPlayers(searchTerm)
-        ]);
-
-        const filteredDistricts = districts.filter(district =>
-          district.name_des_bezirks.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-
-        const filteredLeagues = leagues.filter(league =>
-          league.name_der_liga.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        const res = await fetch(`/api/mirror/search?q=${encodeURIComponent(searchTerm)}`);
+        if (!res.ok) {
+          throw new Error(`Search failed: ${res.status}`);
+        }
+        const payload = (await res.json()) as {
+          players: Array<{ name: string; club: string; gameCount: number }>;
+          clubs: Array<{ name: string; gameCount: number }>;
+        };
 
         const formattedResults: SearchResult[] = [
-          ...clubs.map(club => ({
-            id: club.nr_club,
+          ...payload.clubs.map(club => ({
+            id: club.name,
             type: 'Club',
-            name: club.name_klub,
-            description: 'Kegel club'
+            name: club.name,
+            description: `${club.gameCount} gespiegelte Spiele`
           })),
-          ...players.map(player => ({
-            id: player.id,
+          ...payload.players.map(player => ({
+            id: player.name,
             type: 'Player',
             name: player.name,
-            description: `Player at ${player.club}`
-          })),
-          ...filteredDistricts.map(district => ({
-            id: district.bezirk_id,
-            type: 'District',
-            name: district.name_des_bezirks,
-            description: 'Region for kegel sport'
-          })),
-          ...filteredLeagues.map(league => ({
-            id: league.liga_id,
-            type: 'League',
-            name: league.name_der_liga,
-            description: league.kontakt_name ? `Contact: ${league.kontakt_name}` : 'Kegel league'
+            description: `${player.club || 'Kein Verein'} · ${player.gameCount} Spiele`
           }))
         ];
 
@@ -86,15 +66,14 @@ export default function SearchClient() {
     };
 
     void performSearch();
-  }, [apiService, searchTerm]);
+  }, [searchTerm]);
 
-  const [filter, setFilter] = useState<'all' | 'clubs' | 'players' | 'leagues'>('all');
+  const [filter, setFilter] = useState<'all' | 'clubs' | 'players'>('all');
 
   const filteredResults = results.filter(result => {
     if (filter === 'all') return true;
     if (filter === 'clubs') return result.type.toLowerCase().includes('club') || result.type.toLowerCase() === 'team';
     if (filter === 'players') return result.type.toLowerCase().includes('player');
-    if (filter === 'leagues') return result.type.toLowerCase().includes('league') || result.type.toLowerCase().includes('district');
     return true;
   });
 
@@ -102,10 +81,11 @@ export default function SearchClient() {
     <div className="min-h-screen bg-background">
       <Menubar />
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Search Results</h1>
+        <div className="mb-8 rounded-3xl border border-border bg-gradient-to-br from-red-500/15 via-background to-rose-500/10 p-6 shadow-sm">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Mirror Search</div>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Suche</h1>
           <p className="text-muted-foreground">
-            {searchTerm ? `Results for "${searchTerm}"` : 'Enter a search term to begin'}
+            {searchTerm ? `Ergebnisse für "${searchTerm}"` : 'Spieler und Vereine aus dem gespiegelten Sportwinner-Bestand.'}
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -139,16 +119,6 @@ export default function SearchClient() {
             >
               Players
             </button>
-            <button
-              onClick={() => setFilter('leagues')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                filter === 'leagues'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              Leagues & Districts
-            </button>
           </div>
         </div>
 
@@ -161,22 +131,26 @@ export default function SearchClient() {
         )}
 
         {!loading && !error && filteredResults.length > 0 && (
-          <div className="max-w-4xl mx-auto space-y-4">
+          <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
             {filteredResults.map((result) => (
-              <div
+              <Link
                 key={`${result.type}-${result.id}`}
-                className="border border-border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+                href={result.type === 'Player' ? `/player?name=${encodeURIComponent(result.name)}` : `/club?name=${encodeURIComponent(result.name)}`}
+                className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20"
               >
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-4">
                   <div>
                     <h2 className="text-xl font-semibold">{result.name}</h2>
-                    <p className="text-muted-foreground text-sm mt-1">{result.description}</p>
+                    <p className="mt-2 text-sm text-muted-foreground">{result.description}</p>
                   </div>
-                  <span className="bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-sm">
+                  <span className="rounded-full bg-secondary px-3 py-1 text-sm text-secondary-foreground">
                     {result.type}
                   </span>
                 </div>
-              </div>
+                <div className="mt-4 text-sm font-medium text-primary group-hover:underline">
+                  {result.type === 'Player' ? 'Spielerprofil öffnen' : 'Vereinsseite öffnen'}
+                </div>
+              </Link>
             ))}
           </div>
         )}
@@ -184,16 +158,16 @@ export default function SearchClient() {
         {!loading && !error && filteredResults.length === 0 && searchTerm && (
           <div className="text-center py-12">
             <p className="text-lg text-muted-foreground">
-              No {filter !== 'all' ? filter : ''} results found for &quot;{searchTerm}&quot;
+              Keine Treffer für &quot;{searchTerm}&quot;
             </p>
           </div>
         )}
 
         {!searchTerm && (
           <div className="mt-12 max-w-3xl mx-auto">
-            <h2 className="text-2xl font-bold mb-6 text-center">Search Kegel Clubs, Players & Leagues</h2>
+            <h2 className="text-2xl font-bold mb-6 text-center">Spieler und Vereine suchen</h2>
             <div className="bg-muted rounded-xl p-8 text-center">
-              <p className="text-muted-foreground">Enter a search term above to get started</p>
+              <p className="text-muted-foreground">Suche nach einem Namen, um gespiegelte Historien und Ergebnisse zu öffnen.</p>
             </div>
           </div>
         )}

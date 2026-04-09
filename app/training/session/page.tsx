@@ -198,9 +198,17 @@ function TrainingSessionPageContent() {
     const parsed = Number(quickCount);
     if (!Number.isInteger(parsed) || parsed < 0 || parsed > TOTAL_PINS) return;
 
+    const quickPins = isClearingPhase
+      ? remainingPins.slice(0, parsed)
+      : Array.from({ length: parsed }, (_, index) => index + 1);
+
+    if (parsed > 0 && quickPins.length !== parsed) {
+      return;
+    }
+
     const nextThrow: Throw = {
       id: Date.now(),
-      pins: Array.from({ length: parsed }, (_, index) => index + 1),
+      pins: quickPins,
       timestamp: new Date().toISOString(),
     };
 
@@ -441,17 +449,17 @@ function TrainingSessionPageContent() {
                 Schnelle Eingabe
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Falls dir die einzelnen Pins egal sind, gib nur die gefallene Zahl von 0 bis 9 ein.
+                Falls dir die einzelnen Pins egal sind, gib nur die gefallene Zahl ein. Im Abräumen werden dabei nur noch stehende Pins gezählt.
               </p>
               <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                 <input
                   type="number"
                   min="0"
-                  max="9"
+                  max={isClearingPhase ? String(remainingPins.length) : '9'}
                   value={quickCount}
                   onChange={(event) => setQuickCount(event.target.value)}
                   className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30 sm:max-w-[180px]"
-                  placeholder="0-9"
+                  placeholder={isClearingPhase ? `0-${remainingPins.length}` : '0-9'}
                 />
                 <button
                   onClick={saveQuickThrow}
