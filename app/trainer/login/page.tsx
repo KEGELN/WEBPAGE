@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Menubar from "@/components/menubar";
-import { LogIn, AlertCircle, Shield, Loader2 } from 'lucide-react';
+import { LogIn, AlertCircle, Shield, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function TrainerLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -88,18 +89,27 @@ export default function TrainerLoginPage() {
               <label htmlFor="password" className="text-sm font-medium ml-1">
                 Passwort
               </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setError('');
-                }}
-                placeholder="Dein Passwort"
-                className="w-full bg-muted border border-border rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                required
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError('');
+                  }}
+                  placeholder="Dein Passwort"
+                  className="w-full bg-muted border border-border rounded-xl py-3 px-4 pr-12 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -128,11 +138,17 @@ export default function TrainerLoginPage() {
             </button>
           </form>
 
-          <div className="text-center">
+          <div className="text-center space-y-2">
             <p className="text-sm text-muted-foreground">
               Noch kein Konto?{' '}
               <Link href="/trainer/register" className="text-primary font-semibold hover:underline">
                 Jetzt registrieren
+              </Link>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Passwort vergessen?{' '}
+              <Link href="/trainer/forgot-password" className="text-primary font-semibold hover:underline">
+                Zurücksetzen
               </Link>
             </p>
           </div>

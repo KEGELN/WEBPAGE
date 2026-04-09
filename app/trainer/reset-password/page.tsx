@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
-import { UserPlus, AlertCircle, Shield, Loader2, CheckCircle, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { Lock, AlertCircle, CheckCircle, Shield, Loader2, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
-export default function TrainerRegisterPage() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -17,28 +15,22 @@ export default function TrainerRegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [invalidToken, setInvalidToken] = useState(false);
   const router = useRouter();
-  const { trainer, signUp } = useAuth();
 
   useEffect(() => {
-    if (trainer) {
-      router.push('/trainer/dashboard');
-    }
-  }, [trainer, router]);
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setInvalidToken(true);
+      }
+    };
+    checkSession();
+  }, []);
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    if (!name.trim()) {
-      setError('Bitte gib deinen Namen ein.');
-      return;
-    }
-
-    if (!email.includes('@')) {
-      setError('Bitte gib eine gültige E-Mail-Adresse ein.');
-      return;
-    }
 
     if (password.length < 6) {
       setError('Das Passwort muss mindestens 6 Zeichen haben.');
@@ -51,19 +43,47 @@ export default function TrainerRegisterPage() {
     }
 
     setLoading(true);
-    const result = await signUp(email, password, name.trim());
+
+    const { error: updateError } = await supabase.auth.updateUser({
+      password,
+    });
+
     setLoading(false);
 
-    if (result.error) {
-      if (result.error.includes('already registered')) {
-        setError('Diese E-Mail-Adresse ist bereits registriert.');
-      } else {
-        setError(result.error);
-      }
+    if (updateError) {
+      setError(updateError.message);
     } else {
       setSuccess(true);
     }
   };
+
+  if (invalidToken) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <Menubar />
+        <main className="container mx-auto px-4 py-20 flex justify-center">
+          <div className="w-full max-w-md space-y-8 bg-card p-8 rounded-3xl border border-border shadow-xl text-center">
+            <div className="mx-auto w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center text-destructive">
+              <AlertCircle size={32} />
+            </div>
+            <h1 className="text-2xl font-bold">Ungültiger Link</h1>
+            <p className="text-muted-foreground">
+              Dieser Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen.
+              Bitte fordere einen neuen Link an.
+            </p>
+            <div className="pt-6">
+              <Link 
+                href="/trainer/forgot-password"
+                className="inline-flex items-center gap-2 bg-primary text-primary-foreground font-bold py-3 px-8 rounded-xl hover:opacity-90 transition-opacity"
+              >
+                Neuen Link anfordern
+              </Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (success) {
     return (
@@ -71,18 +91,19 @@ export default function TrainerRegisterPage() {
         <Menubar />
         <main className="container mx-auto px-4 py-20 flex justify-center">
           <div className="w-full max-w-md space-y-8 bg-card p-8 rounded-3xl border border-border shadow-xl text-center">
-            <div className="mx-auto w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mb-4 text-green-500">
+            <div className="mx-auto w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center text-green-500">
               <CheckCircle size={32} />
             </div>
-            <h1 className="text-2xl font-bold">Registrierung erfolgreich!</h1>
-            <p className="text-muted-foreground mt-2">
-              Bitte überprüfe deine E-Mail und klicke auf den Bestätigungslink, um dein Konto zu aktivieren.
+            <h1 className="text-2xl font-bold">Passwort geändert!</h1>
+            <p className="text-muted-foreground">
+              Dein Passwort wurde erfolgreich zurückgesetzt. Du kannst dich jetzt mit dem neuen Passwort anmelden.
             </p>
             <div className="pt-6">
               <Link 
                 href="/trainer/login"
                 className="inline-flex items-center gap-2 bg-primary text-primary-foreground font-bold py-3 px-8 rounded-xl hover:opacity-90 transition-opacity"
               >
+                <ArrowLeft size={18} />
                 Zum Login
               </Link>
             </div>
@@ -99,54 +120,18 @@ export default function TrainerRegisterPage() {
         <div className="w-full max-w-md space-y-8 bg-card p-8 rounded-3xl border border-border shadow-xl">
           <div className="text-center">
             <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary">
-              <UserPlus size={24} />
+              <Lock size={24} />
             </div>
-            <h1 className="text-2xl font-bold">Trainer Registrierung</h1>
+            <h1 className="text-2xl font-bold">Neues Passwort</h1>
             <p className="text-muted-foreground mt-2 text-sm">
-              Erstelle dein Trainer-Konto, um Spieler zu verwalten und Trainingsdaten einzusehen.
+              Gib dein neues Passwort ein.
             </p>
           </div>
 
-          <form onSubmit={handleRegister} className="space-y-6">
-            <div className="space-y-2">
-              <label htmlFor="name" className="text-sm font-medium ml-1">
-                Name
-              </label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setError('');
-                }}
-                placeholder="Max Mustermann"
-                className="w-full bg-muted border border-border rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium ml-1">
-                E-Mail Adresse
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setError('');
-                }}
-                placeholder="trainer@verein.de"
-                className="w-full bg-muted border border-border rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                required
-              />
-            </div>
-
+          <form onSubmit={handleReset} className="space-y-6">
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium ml-1">
-                Passwort
+                Neues Passwort
               </label>
               <div className="relative">
                 <input
@@ -214,12 +199,12 @@ export default function TrainerRegisterPage() {
               {loading ? (
                 <>
                   <Loader2 size={20} className="animate-spin" />
-                  Registrieren...
+                  Wird gespeichert...
                 </>
               ) : (
                 <>
-                  <UserPlus size={20} />
-                  Konto erstellen
+                  <Lock size={20} />
+                  Passwort speichern
                 </>
               )}
             </button>
@@ -227,17 +212,10 @@ export default function TrainerRegisterPage() {
 
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              Bereits ein Konto?{' '}
-              <Link href="/trainer/login" className="text-primary font-semibold hover:underline">
-                Hier anmelden
+              <Link href="/trainer/login" className="text-primary font-semibold hover:underline inline-flex items-center gap-1">
+                <ArrowLeft size={14} />
+                Zurück zum Login
               </Link>
-            </p>
-          </div>
-
-          <div className="pt-6 border-t border-border mt-6">
-            <p className="text-xs text-center text-muted-foreground">
-              <Shield size={12} className="inline mr-1" />
-              Deine Daten werden sicher gespeichert und nur für die Trainer-Verwaltung verwendet.
             </p>
           </div>
         </div>
