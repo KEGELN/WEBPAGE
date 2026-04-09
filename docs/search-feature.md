@@ -1,62 +1,159 @@
 # Search Feature Documentation
 
 ## Overview
-This document details the implementation of the search functionality for the Kegel website. The search feature allows users to search for clubs, leagues, and districts from the SportWinner API.
 
-## Features
+The search feature allows users to find **players** and **clubs** from the Sportwinner database. Search results include game statistics and last match date.
 
-### 1. API Integration
-- Integrated with SportWinner API endpoints as defined in `api.org`
-- Implemented search for clubs, districts, and leagues
-- Created `ApiService` to handle all API communications
+## Architecture
 
-### 2. Search UI
-- Search bar in the menubar allows quick access
-- Results displayed in a bento grid layout matching the overall design
-- Responsive design that works on all device sizes
+### Data Flow
 
-### 3. Bento Grid Design
-- Consistent styling with the menubar theme
-- Interactive cards with hover effects
-- MagicBento animations and effects
+```
+User Input → /api/mirror/search → mirror-store.ts → Supabase PostgreSQL
+                                              ↓ (fallback)
+                                          local SQLite
+```
 
-## Technical Implementation
+### Two Data Sources
 
-### API Service (`lib/api-service.ts`)
-The API service provides methods for interacting with the SportWinner API:
+1. **Supabase PostgreSQL** (production)
+   - Pre-indexed search data synced from local mirror
+   - Fast `ILIKE` queries on normalized names
+   - ~1000+ player entries, 100+ clubs
 
-- `getCurrentSeason()`: Fetches the current season information
-- `searchClubs(query, seasonId)`: Searches for clubs by name
-- `getDistricts(seasonId)`: Gets all districts for a season
-- `getLeagues(seasonId, districtId)`: Gets leagues for a season and district
+2. **Local SQLite** (development fallback)
+   - `mirror-db/data/sportwinner.db`
+   - Same schema, updated via `python3 build_db.py`
 
-### Search Page (`app/search/page.tsx`)
-- Uses Next.js `useSearchParams` to read query parameters
-- Makes API calls when search term changes
-- Displays results in a responsive bento grid
-- Shows loading states and error handling
+## API Endpoints
 
-### Components
-- `MagicBento`: Custom animated bento grid component
-- `SearchBentoCard`: Specialized card for search results
-- Menubar integration with search functionality
+### Search Players & Clubs
 
-## Endpoints Used
-- `GetSaisonArray`: To get the current season
-- `GetKlub`: To search for clubs
-- `GetBezirkArray`: To get districts
-- `GetLigaArray`: To get leagues
+```
+GET /api/mirror/search?q={query}
+```
 
-## Design Updates
-- Updated MagicBento component to match menubar color scheme
-- Changed color palette to blue/purple theme to match menubar
-- Improved responsive design for all screen sizes
-- Added proper typography and spacing
+**Response:**
+```json
+{
+  "players": [
+    {
+      "name": "Max Mustermann",
+      "club": "KV Berlin",
+      "gameCount": 15,
+      "lastGameDate": "2024-03-15"
+    }
+  ],
+  "clubs": [
+    {
+      "name": "KV Berlin",
+      "gameCount": 42,
+      "lastGameDate": "2024-03-20"
+    }
+  ]
+}
+```
 
-## Files Modified
-- `app/search/page.tsx` - Updated search page with API integration
-- `app/player/page.tsx` - Updated to match new design system
-- `lib/api-service.ts` - New API service for SportWinner endpoints
-- `components/MagicBento.jsx` - Updated styling and content
-- `components/MagicBento.css` - Updated CSS variables for theme
-- `components/ResultBentoCard.tsx` - New component for search results
+### Player Profile
+
+```
+GET /api/mirror/player?name={name}
+```
+
+Returns game history, statistics, and win/loss/draw record.
+
+### Club Profile
+
+```
+GET /api/mirror/club?name={name}
+```
+
+Returns club game history and statistics.
+
+### Game Details
+
+```
+GET /api/mirror/game?id={gameId}
+```
+
+Returns detailed game results with player rows.
+
+## Supabase Schema
+
+### player_search_index
+
+```sql
+CREATE TABLE player_search_index (
+  player_key TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,  -- lowercase, no special chars
+  club_name TEXT,
+  game_count INTEGER DEFAULT 0,
+  last_game_date TEXT,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_player_search_normalized_name ON player_search_index(normalized_name varchar_pattern_ops);
+```
+
+### club_search_index
+
+```sql
+CREATE TABLE club_search_index (
+  club_key TEXT PRIMARY KEY,
+  club_name TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  game_count INTEGER DEFAULT 0,
+  last_game_date TEXT
+);
+```
+
+## Sync Process
+
+### Build Local Mirror
+
+```bash
+cd mirror-db
+python3 build_db.py --source sportwinner
+```
+
+This fetches from Sportwinner API and updates `data/sportwinner.db`.
+
+### Push to Supabase
+
+```bash
+python3 ../scripts/sync-to-supabase.py --mirror
+```
+
+This replaces the search indexes in Supabase with fresh data.
+
+## Development
+
+### Local Development
+
+1. Build mirror: `cd mirror-db && python3 build_db.py --source sportwinner`
+2. Start app: `npm run dev`
+3. Search uses local SQLite automatically
+
+### Production
+
+1. Sync runs via GitHub Actions (daily) or manually
+2. Vercel reads from Supabase
+3. No Python needed at runtime
+
+## Search Algorithm
+
+1. User enters query (e.g., "Müller")
+2. Query normalized: `müller` → `%mller%` (removes umlauts, special chars)
+3. SQL `ILIKE` search on `normalized_name`
+4. Results grouped by player, sorted by `game_count` DESC
+5. Limit 12 results per category
+
+## Files
+
+- `app/api/mirror/search/route.ts` - Search API
+- `app/api/mirror/player/route.ts` - Player profile API
+- `app/api/mirror/club/route.ts` - Club profile API
+- `app/api/mirror/game/route.ts` - Game details API
+- `lib/mirror-store.ts` - Database abstraction layer
+- `lib/postgres.ts` - PostgreSQL connection pool
+- `mirror-db/` - Local mirror builder
