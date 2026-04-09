@@ -27,21 +27,18 @@ function createPool(connectionString: string) {
   const isVercel = process.env.VERCEL === '1';
   const isSupabase = connectionString.includes('supabase') || process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-  let finalConnectionString = connectionString;
-  if (isSupabase) {
-    finalConnectionString = connectionString.replace(/sslmode=[^&]*/g, '').replace(/\?$/, '').replace(/\?&/, '?');
-    if (!finalConnectionString.includes('?')) {
-      finalConnectionString += '?sslmode=require';
-    }
-  }
-
   const poolConfig: PoolConfig = {
-    connectionString: finalConnectionString,
-    ssl: isSupabase ? { rejectUnauthorized: false } : false,
+    connectionString,
     max: isVercel ? 2 : 5,
     idleTimeoutMillis: isVercel ? 10000 : 30000,
     connectionTimeoutMillis: isVercel ? 5000 : 10000,
   };
+
+  if (isSupabase) {
+    poolConfig.ssl = {
+      rejectUnauthorized: false,
+    };
+  }
 
   const pool = new Pool(poolConfig);
 
