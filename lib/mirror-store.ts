@@ -1,4 +1,3 @@
-import { getMirrorPool, hasMirrorDatabase } from '@/lib/postgres';
 import {
   getMirrorClubProfile as getLocalMirrorClubProfile,
   getMirrorGameDetail as getLocalMirrorGameDetail,
@@ -25,76 +24,97 @@ function parseResultScore(result: string | null) {
   return { home: Number(match[1]), away: Number(match[2]) };
 }
 
-function postgresMirrorStore() {
-  const pool = getMirrorPool();
+function getSupabaseUrl() {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://sggiacazfxtntyeywmpd.supabase.co';
+}
+
+function getSupabaseKey() {
+  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+}
+
+async function supabaseQuery(table: string, params: Record<string, string> = {}) {
+  const url = new URL(`${getSupabaseUrl()}/rest/v1/${table}`);
+  Object.entries(params).forEach(([key, value]) => {
+    url.searchParams.append(key, value);
+  });
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      'apikey': getSupabaseKey(),
+      'Authorization': `Bearer ${getSupabaseKey()}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Supabase error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function hasSupabaseConfig() {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+}
+
+function supabaseMirrorStore() {
   return {
     search: async (query: string): Promise<MirrorSearch> => {
-      const normalized = `%${query.toLowerCase().replace(/[^a-z0-9äöüß]/gi, '').replace(/\s+/g, '')}%`;
-      const [playersResult, clubsResult] = await Promise.all([
-        pool.query(
-          `
-          SELECT player_name, max(club_name) AS club_name, sum(game_count)::int AS game_count, max(last_game_date) AS last_game_date
-          FROM player_search_index
-          WHERE normalized_name LIKE $1
-          GROUP BY player_name
-          ORDER BY game_count DESC, last_game_date DESC
-          LIMIT 12
-          `,
-          [normalized]
-        ),
-        pool.query(
-          `
-          SELECT club_name, sum(game_count)::int AS game_count, max(last_game_date) AS last_game_date
-          FROM club_search_index
-          WHERE normalized_name LIKE $1
-          GROUP BY club_name
-          ORDER BY game_count DESC, last_game_date DESC
-          LIMIT 12
-          `,
-          [normalized]
-        ),
-      ]);
+      const normalized = query.toLowerCase().replace(/[^a-z0-9äöüß]/gi, '').replace(/\s+/g, '');
+      
+      const playersData = await supabaseQuery('player_search_index', {
+        'normalized_name': `ilike.*${normalized}*`,
+        'select': 'player_name,club_name,game_count,last_game_date',
+        'order': 'game_count.desc,last_game_date.desc',
+        'limit': '12',
+      });
+
+      const clubsData = await supabaseQuery('club_search_index', {
+        'normalized_name': `ilike.*${normalized}*`,
+        'select': 'club_name,game_count,last_game_date',
+        'order': 'game_count.desc,last_game_date.desc',
+        'limit': '12',
+      });
 
       return {
-        players: playersResult.rows.map((row) => ({
-          name: String(row.player_name),
+        players: (playersData || []).map((row: Record<string, unknown>) => ({
+          name: String(row.player_name || ''),
           club: String(row.club_name ?? ''),
           gameCount: Number(row.game_count ?? 0),
           lastGameDate: row.last_game_date ? String(row.last_game_date) : '',
         })),
-        clubs: clubsResult.rows.map((row) => ({
-          name: String(row.club_name),
+        clubs: (clubsData || []).map((row: Record<string, unknown>) => ({
+          name: String(row.club_name || ''),
           gameCount: Number(row.game_count ?? 0),
           lastGameDate: row.last_game_date ? String(row.last_game_date) : '',
         })),
       };
     },
     playerProfile: async (name: string): Promise<MirrorPlayerProfile> => {
-      const result = await pool.query(
-        `
-        SELECT
-          g.game_id,
-          g.game_date,
-          g.game_time,
-          g.team_home,
-          g.team_away,
-          g.result,
-          g.score_home,
-          g.score_away,
-          g.league_context,
-          g.matchday_label,
-          gpr.raw_row_json
-        FROM game_player_rows gpr
-        JOIN games g ON g.game_id = gpr.game_id
-        WHERE (gpr.raw_row_json->>0 = $1) OR (gpr.raw_row_json->>15 = $1)
-        ORDER BY g.game_date DESC, g.game_time DESC, gpr.row_index ASC
-        `,
-        [name]
-      );
+      const rowsData = await supabaseQuery('game_player_rows', {
+        'or': `(raw_row_json->>0.eq.${name}),(raw_row_json->>15.eq.${name})`,
+        'select': 'game_id,raw_row_json',
+        'order': 'game_id.desc',
+        'limit': '100',
+      });
 
-      if (result.rows.length === 0) {
+      if (!rowsData || rowsData.length === 0) {
         return { found: false, playerName: name };
       }
+
+      const uniqueGameIds = [...new Set(rowsData.map((r: Record<string, unknown>) => r.game_id as string))];
+      
+      const gamesData = await Promise.all(
+        uniqueGameIds.slice(0, 50).map((gameId: string) => 
+          supabaseQuery('games', {
+            'game_id': `eq.${gameId}`,
+            'select': 'game_id,game_date,game_time,team_home,team_away,result,league_context,matchday_label',
+            'limit': '1',
+          })
+        )
+      );
+
+      const gamesMap = new Map<string, Record<string, unknown>>();
+      gamesData.flat().forEach((g: Record<string, unknown>) => gamesMap.set(g.game_id as string, g));
 
       const uniqueGames = new Set<string>();
       const clubs = new Set<string>();
@@ -103,15 +123,18 @@ function postgresMirrorStore() {
       let totalHolz = 0;
       let countedRows = 0;
 
-      for (const row of result.rows) {
-        const raw = row.raw_row_json as unknown[];
+      for (const row of rowsData as Array<{game_id: string; raw_row_json: unknown[]}>) {
+        const game = gamesMap.get(row.game_id);
+        if (!game) continue;
+
+        const raw = row.raw_row_json;
         const isHome = String(raw[0] ?? '') === name;
         const playerTotal = String(isHome ? raw[5] ?? '' : raw[10] ?? '');
         const playerSp = String(isHome ? raw[6] ?? '' : raw[9] ?? '');
         const playerMp = String(isHome ? raw[7] ?? '' : raw[8] ?? '');
-        const teamName = String(isHome ? row.team_home : row.team_away);
-        const opponentClub = String(isHome ? row.team_away : row.team_home);
-        const score = parseResultScore(row.result ? String(row.result) : null);
+        const teamName = String(isHome ? game.team_home : game.team_away);
+        const opponentClub = String(isHome ? game.team_away : game.team_home);
+        const score = parseResultScore(game.result ? String(game.result) : null);
         const gameId = String(row.game_id);
         uniqueGames.add(gameId);
         clubs.add(teamName);
@@ -131,13 +154,13 @@ function postgresMirrorStore() {
           const scoreAgainst = score ? (isHome ? score.away : score.home) : null;
           history.push({
             gameId,
-            date: row.game_date ? String(row.game_date) : null,
-            time: row.game_time ? String(row.game_time) : null,
-            league: row.league_context ? String(row.league_context) : null,
-            spieltag: row.matchday_label ? String(row.matchday_label) : null,
+            date: game.game_date ? String(game.game_date) : null,
+            time: game.game_time ? String(game.game_time) : null,
+            league: game.league_context ? String(game.league_context) : null,
+            spieltag: game.matchday_label ? String(game.matchday_label) : null,
             club: teamName,
             opponentClub,
-            result: row.result ? String(row.result) : null,
+            result: game.result ? String(game.result) : null,
             teamResult: scoreFor === null || scoreAgainst === null ? null : `${scoreFor}:${scoreAgainst}`,
             holz: playerTotal || null,
             sp: playerSp || null,
@@ -170,17 +193,14 @@ function postgresMirrorStore() {
       } as MirrorPlayerProfile;
     },
     clubProfile: async (name: string): Promise<MirrorClubProfile> => {
-      const result = await pool.query(
-        `
-        SELECT game_id, game_date, game_time, team_home, team_away, result, league_context, matchday_label
-        FROM games
-        WHERE team_home = $1 OR team_away = $1
-        ORDER BY game_date DESC, game_time DESC
-        `,
-        [name]
-      );
+      const gamesData = await supabaseQuery('games', {
+        'or': `(team_home.eq.${encodeURIComponent(name)}),(team_away.eq.${encodeURIComponent(name)})`,
+        'select': 'game_id,game_date,game_time,team_home,team_away,result,league_context,matchday_label',
+        'order': 'game_date.desc,game_time.desc',
+        'limit': '20',
+      });
 
-      if (result.rows.length === 0) {
+      if (!gamesData || gamesData.length === 0) {
         return { found: false, clubName: name };
       }
 
@@ -189,7 +209,7 @@ function postgresMirrorStore() {
       let draws = 0;
       const history: NonNullable<MirrorClubProfile['history']> = [];
 
-      for (const row of result.rows) {
+      for (const row of gamesData as Array<Record<string, unknown>>) {
         const isHome = String(row.team_home) === name;
         const score = parseResultScore(row.result ? String(row.result) : null);
         if (score) {
@@ -217,7 +237,7 @@ function postgresMirrorStore() {
       return {
         found: true,
         clubName: name,
-        gamesPlayed: result.rows.length,
+        gamesPlayed: gamesData.length,
         wins,
         losses,
         draws,
@@ -225,18 +245,25 @@ function postgresMirrorStore() {
       };
     },
     gameDetail: async (gameId: string) => {
-      const [headerResult, rowsResult] = await Promise.all([
-        pool.query('SELECT * FROM games WHERE game_id = $1 LIMIT 1', [gameId]),
-        pool.query('SELECT raw_row_json FROM game_player_rows WHERE game_id = $1 ORDER BY row_index', [gameId]),
-      ]);
+      const headerData = await supabaseQuery('games', {
+        'game_id': `eq.${gameId}`,
+        'limit': '1',
+      });
+
+      const rowsData = await supabaseQuery('game_player_rows', {
+        'game_id': `eq.${gameId}`,
+        'select': 'raw_row_json',
+        'order': 'row_index.asc',
+      });
+
       return {
-        header: headerResult.rows[0] ?? null,
-        rows: rowsResult.rows.map((row) => row.raw_row_json as Array<string | number | null>),
+        header: headerData?.[0] ?? null,
+        rows: (rowsData || []).map((row: Record<string, unknown>) => row.raw_row_json as Array<string | number | null>),
       };
     },
   };
 }
 
 export function getMirrorStore() {
-  return hasMirrorDatabase() ? postgresMirrorStore() : localMirrorStore();
+  return hasSupabaseConfig() ? supabaseMirrorStore() : localMirrorStore();
 }
