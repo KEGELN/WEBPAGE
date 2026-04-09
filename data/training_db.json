@@ -3,7 +3,7 @@
     {
       "id": "P-HCEEV0",
       "name": "jan",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "createdAt": "2026-03-30T12:47:53.785Z",
       "username": "janev0",
       "tempPassword": "GS1WOY",
@@ -12,7 +12,7 @@
     {
       "id": "P-HK92IR",
       "name": "Lennard",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "createdAt": "2026-03-30T14:10:19.021Z",
       "username": "lennard2ir",
       "tempPassword": "41JSED",
@@ -24,10 +24,10 @@
       "id": "session_1775683123128",
       "playerId": "P-HK92IR",
       "playerName": "Lennard",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "timestamp": "2026-04-08T21:18:43.128Z",
       "type": "standard",
-      "recorderId": "lennardsdrojek42@gmail.com",
+      "recorderId": "ksc@ksc.de",
       "recorderName": "lennardsdrojek42",
       "throws": [
         {
@@ -45,7 +45,7 @@
       "id": "session_1775683017919",
       "playerId": "T-LENNARDSDR",
       "playerName": "lennardsdrojek42",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "timestamp": "2026-04-08T21:16:57.919Z",
       "type": "standard",
       "throws": [
@@ -88,7 +88,7 @@
     {
       "id": "session_1774880090980",
       "playerId": "T-LENNARDSDR",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "timestamp": "2026-03-30T14:14:50.980Z",
       "type": "standard",
       "throws": [
@@ -162,7 +162,7 @@
     {
       "id": "session_1774877207586",
       "playerId": "P-HCEEV0",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "timestamp": "2026-03-30T13:26:47.586Z",
       "type": "standard",
       "throws": [
@@ -180,7 +180,7 @@
     {
       "id": "session_1774877191865",
       "playerId": "P-HCEEV0",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "timestamp": "2026-03-30T13:26:31.865Z",
       "type": "game_120",
       "throws": [],
@@ -302,7 +302,7 @@
     {
       "id": "session_1774875003063",
       "playerId": "P-HCEEV0",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "timestamp": "2026-03-30T12:50:03.063Z",
       "throws": [
         {
@@ -412,7 +412,7 @@
     {
       "id": "session_1774874914839",
       "playerId": "P-HCEEV0",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "timestamp": "2026-03-30T12:48:34.839Z",
       "throws": [
         {
@@ -474,7 +474,7 @@
   ],
   "trainers": [
     {
-      "email": "lennardsdrojek42@gmail.com",
+      "email": "ksc@ksc.de",
       "name": "lennardsdrojek42",
       "role": "trainer"
     }
@@ -482,14 +482,14 @@
   "trainerMessages": [
     {
       "playerId": "P-HK92IR",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "text": "Hello",
       "id": "msg_1774880265932_ko8du8",
       "createdAt": "2026-03-30T14:17:45.932Z"
     },
     {
       "playerId": "P-HCEEV0",
-      "trainerEmail": "lennardsdrojek42@gmail.com",
+      "trainerEmail": "ksc@ksc.de",
       "text": "Spiele rechte gasse",
       "id": "msg_1774878636277_qcejkk",
       "createdAt": "2026-03-30T13:50:36.277Z"
@@ -499,7 +499,7 @@
     {
       "id": "club_1774878101066_s4x3bi",
       "name": "KSC I",
-      "ownerTrainerEmail": "lennardsdrojek42@gmail.com",
+      "ownerTrainerEmail": "ksc@ksc.de",
       "inviteToken": "PL2LWLLJ",
       "createdAt": "2026-03-30T13:41:41.066Z",
       "allowedPlayerIds": [
@@ -511,7 +511,7 @@
     {
       "clubId": "club_1774878101066_s4x3bi",
       "memberType": "trainer",
-      "memberId": "lennardsdrojek42@gmail.com",
+      "memberId": "ksc@ksc.de",
       "displayName": "lennardsdrojek42",
       "joinedAt": "2026-03-30T13:41:41.066Z"
     }
@@ -520,7 +520,7 @@
     {
       "clubId": "club_1774878101066_s4x3bi",
       "authorType": "trainer",
-      "authorId": "lennardsdrojek42@gmail.com",
+      "authorId": "ksc@ksc.de",
       "authorName": "lennardsdrojek42",
       "text": "Hello",
       "id": "clubmsg_1774878111737_8zqhjg",
@@ -529,7 +529,7 @@
     {
       "clubId": "club_1774878101066_s4x3bi",
       "authorType": "trainer",
-      "authorId": "lennardsdrojek42@gmail.com",
+      "authorId": "ksc@ksc.de",
       "authorName": "lennardsdrojek42",
       "text": "@123456",
       "id": "clubmsg_1774878188116_qb4q94",
@@ -538,7 +538,7 @@
     {
       "clubId": "club_1774878101066_s4x3bi",
       "authorType": "trainer",
-      "authorId": "lennardsdrojek42@gmail.com",
+      "authorId": "ksc@ksc.de",
       "authorName": "lennardsdrojek42",
       "text": "@269214",
       "id": "clubmsg_1774878286565_f8ne99",
@@ -547,7 +547,7 @@
     {
       "clubId": "club_1774878101066_s4x3bi",
       "authorType": "trainer",
-      "authorId": "lennardsdrojek42@gmail.com",
+      "authorId": "ksc@ksc.de",
       "authorName": "lennardsdrojek42",
       "text": "This is a test.",
       "id": "clubmsg_1774878307749_mr7lai",
@@ -556,7 +556,7 @@
     {
       "clubId": "club_1774878101066_s4x3bi",
       "authorType": "trainer",
-      "authorId": "lennardsdrojek42@gmail.com",
+      "authorId": "ksc@ksc.de",
       "authorName": "lennardsdrojek42",
       "text": "@269214",
       "id": "clubmsg_1774878509425_bsr5on",
@@ -565,7 +565,7 @@
     {
       "clubId": "club_1774878101066_s4x3bi",
       "authorType": "trainer",
-      "authorId": "lennardsdrojek42@gmail.com",
+      "authorId": "ksc@ksc.de",
       "authorName": "lennardsdrojek42",
       "text": "@269214",
       "id": "clubmsg_1774878565275_nisz7j",
@@ -574,7 +574,7 @@
     {
       "clubId": "club_1774878101066_s4x3bi",
       "authorType": "trainer",
-      "authorId": "lennardsdrojek42@gmail.com",
+      "authorId": "ksc@ksc.de",
       "authorName": "lennardsdrojek42",
       "text": "@320520",
       "id": "clubmsg_1774878680358_ilq5h6",
@@ -591,7 +591,7 @@
       "votes": [
         {
           "memberType": "trainer",
-          "memberId": "lennardsdrojek42@gmail.com",
+          "memberId": "ksc@ksc.de",
           "displayName": "lennardsdrojek42",
           "status": "no",
           "updatedAt": "2026-03-30T13:43:14.364Z"
@@ -607,7 +607,7 @@
       "votes": [
         {
           "memberType": "trainer",
-          "memberId": "lennardsdrojek42@gmail.com",
+          "memberId": "ksc@ksc.de",
           "displayName": "lennardsdrojek42",
           "status": "no",
           "updatedAt": "2026-03-30T13:45:37.797Z"
@@ -623,7 +623,7 @@
       "votes": [
         {
           "memberType": "trainer",
-          "memberId": "lennardsdrojek42@gmail.com",
+          "memberId": "ksc@ksc.de",
           "displayName": "lennardsdrojek42",
           "status": "no",
           "updatedAt": "2026-03-30T14:18:25.560Z"
