@@ -19,12 +19,13 @@ export default function ResetPasswordPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!supabase) {
+    const supabaseClient = supabase;
+    if (!supabaseClient) {
       setInvalidToken(true);
       return;
     }
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabaseClient.auth.getSession();
       if (!session) {
         setInvalidToken(true);
       }
