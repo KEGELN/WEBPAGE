@@ -27,14 +27,38 @@ async function parseBody(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await parseBody(request);
-    const { action, email, playerId, username, tempPassword } = body as {
+    const { action, email, playerId, username, tempPassword, supabaseUserId, name } = body as {
       action?: string;
       email?: string;
       playerId?: string;
       username?: string;
       tempPassword?: string;
+      supabaseUserId?: string;
+      name?: string;
     };
     
+    if (action === 'create-trainer') {
+      if (!email || !supabaseUserId) {
+        return NextResponse.json({ error: 'Email and supabaseUserId required' }, { status: 400 });
+      }
+      const trainer: Trainer = {
+        email: email.toLowerCase(),
+        name: name || email.split('@')[0],
+        role: 'trainer',
+      };
+      await getTrainingStore().saveTrainerWithSupabaseId(trainer, supabaseUserId);
+      return NextResponse.json(trainer);
+    }
+    
+    if (action === 'get-trainer') {
+      if (!supabaseUserId && !email) {
+        return NextResponse.json({ error: 'supabaseUserId or email required' }, { status: 400 });
+      }
+      const trainer = await getTrainingStore().findTrainerBySupabaseId(supabaseUserId || '', email || '');
+      if (trainer) return NextResponse.json(trainer);
+      return NextResponse.json({ error: 'Trainer not found' }, { status: 404 });
+    }
+
     if (action === 'trainer-login') {
       if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 });
       const trainer: Trainer = { email: email.toLowerCase(), name: email.split('@')[0], role: 'trainer' };

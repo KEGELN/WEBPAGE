@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
 import { History, LogOut, Play, Trophy, BarChart3, FileDown, ArrowRight, TrendingUp, FileText, MessageSquare, ClipboardPenLine } from 'lucide-react';
 import { Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
+import { useAuth } from '@/contexts/AuthContext';
 
 type DetailedThrowRow = {
   sessionId: string;
@@ -78,7 +79,7 @@ function renderThrowSvg(pins: number[]) {
   `;
 }
 
-function getTrainingPlayer(): Player | null {
+function getTrainingPlayer(trainer: Trainer | null): Player | null {
   if (typeof window === 'undefined') return null;
 
   const playerAuth = localStorage.getItem('player_auth');
@@ -86,12 +87,10 @@ function getTrainingPlayer(): Player | null {
     return JSON.parse(playerAuth) as Player;
   }
 
-  const trainerAuth = localStorage.getItem('trainer_user');
-  if (!trainerAuth) {
+  if (!trainer) {
     return null;
   }
 
-  const trainer = JSON.parse(trainerAuth) as Trainer;
   const trainerId = `T-${trainer.email.replace(/[^a-z0-9]/gi, '').slice(0, 10).toUpperCase()}`;
 
   return {
@@ -112,14 +111,8 @@ export default function TrainingHomePage() {
     () => true,
     () => false
   );
-  const player = useMemo(() => (isMounted ? getTrainingPlayer() : null), [isMounted]);
-  const trainer = useMemo(() => {
-    if (!isMounted || typeof window === 'undefined') {
-      return null;
-    }
-    const trainerAuth = localStorage.getItem('trainer_user');
-    return trainerAuth ? JSON.parse(trainerAuth) as Trainer : null;
-  }, [isMounted]);
+  const { trainer, signOut } = useAuth();
+  const player = useMemo(() => (isMounted ? getTrainingPlayer(trainer) : null), [isMounted, trainer]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [messages, setMessages] = useState<TrainerMessage[]>([]);
   const [managedPlayers, setManagedPlayers] = useState<Player[]>([]);
@@ -160,9 +153,9 @@ export default function TrainingHomePage() {
     };
   }, [isMounted, player, router, trainer]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('player_auth');
-    localStorage.removeItem('trainer_user');
+    await signOut();
     router.push('/login');
   };
 

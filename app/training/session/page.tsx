@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Menubar from '@/components/menubar';
 import { db, Player, Throw, Trainer, TrainingSession } from '@/lib/db';
 import { ArrowLeft, Check, CircleOff, Save, Trophy, Hash, Sparkles } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const pinLayout = [
   { id: 9, x: 2, y: 0 },
@@ -48,13 +49,7 @@ function getScore(throws: Throw[]) {
   return throws.reduce((acc, throwItem) => acc + throwItem.pins.length, 0);
 }
 
-function getTrainerAuth(): Trainer | null {
-  if (typeof window === 'undefined') return null;
-  const trainerAuth = localStorage.getItem('trainer_user');
-  return trainerAuth ? JSON.parse(trainerAuth) as Trainer : null;
-}
-
-function getTrainingPlayer(): Player | null {
+function getTrainingPlayer(trainer: Trainer | null): Player | null {
   if (typeof window === 'undefined') return null;
 
   const playerAuth = localStorage.getItem('player_auth');
@@ -62,12 +57,10 @@ function getTrainingPlayer(): Player | null {
     return JSON.parse(playerAuth) as Player;
   }
 
-  const trainerAuth = localStorage.getItem('trainer_user');
-  if (!trainerAuth) {
+  if (!trainer) {
     return null;
   }
 
-  const trainer = JSON.parse(trainerAuth) as Trainer;
   const trainerId = `T-${trainer.email.replace(/[^a-z0-9]/gi, '').slice(0, 10).toUpperCase()}`;
 
   return {
@@ -89,8 +82,8 @@ function TrainingSessionPageContent() {
     () => true,
     () => false
   );
-  const authPlayer = useMemo(() => (isMounted ? getTrainingPlayer() : null), [isMounted]);
-  const trainerAuth = useMemo(() => (isMounted ? getTrainerAuth() : null), [isMounted]);
+  const { trainer } = useAuth();
+  const authPlayer = useMemo(() => (isMounted ? getTrainingPlayer(trainer) : null), [isMounted, trainer]);
   const [player, setPlayer] = useState<Player | null>(null);
   const [selectedPins, setSelectedPins] = useState<number[]>([]);
   const [quickCount, setQuickCount] = useState('');
@@ -109,7 +102,7 @@ function TrainingSessionPageContent() {
   const disabledPins = useMemo(() => getDisabledPins(activeThrows), [activeThrows]);
   const isComplete = mode === 'game_120' ? totalThrows >= 120 : totalThrows >= THROWS_PER_BLOCK;
   const targetPlayerId = searchParams.get('playerId') ?? '';
-  const isRecordingForAnotherPlayer = Boolean(trainerAuth && targetPlayerId && authPlayer && targetPlayerId !== authPlayer.id);
+  const isRecordingForAnotherPlayer = Boolean(trainer && targetPlayerId && authPlayer && targetPlayerId !== authPlayer.id);
   const isClearingPhase = getThrowLabel(totalThrows) === 'Abräumen';
   const remainingPins = isClearingPhase
     ? pinLayout.map((pin) => pin.id).filter((pin) => !disabledPins.includes(pin))
@@ -127,14 +120,14 @@ function TrainingSessionPageContent() {
       return;
     }
 
-    if (!trainerAuth) {
+    if (!trainer) {
       router.push('/training');
       return;
     }
 
     let cancelled = false;
 
-    db.getPlayers(trainerAuth.email)
+    db.getPlayers(trainer.email)
       .then((players) => {
         if (cancelled) return;
         const targetPlayer = players.find((candidate) => candidate.id === targetPlayerId) ?? null;
@@ -153,7 +146,7 @@ function TrainingSessionPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [authPlayer, isMounted, isRecordingForAnotherPlayer, router, targetPlayerId, trainerAuth]);
+  }, [authPlayer, isMounted, isRecordingForAnotherPlayer, router, targetPlayerId, trainer]);
 
   useEffect(() => {
     setSelectedPins((current) => current.filter((pin) => !disabledPins.includes(pin)));
@@ -265,8 +258,8 @@ function TrainingSessionPageContent() {
       trainerEmail: player.trainerEmail,
       timestamp: new Date().toISOString(),
       type: mode,
-      recorderId: isRecordingForAnotherPlayer ? trainerAuth?.email : undefined,
-      recorderName: isRecordingForAnotherPlayer ? trainerAuth?.name : undefined,
+      recorderId: isRecordingForAnotherPlayer ? trainer?.email : undefined,
+      recorderName: isRecordingForAnotherPlayer ? trainer?.name : undefined,
       throws: mode === 'standard' ? standardThrows : [],
       lanes: mode === 'game_120' ? lanes : undefined,
     };
@@ -309,9 +302,9 @@ function TrainingSessionPageContent() {
                 : `${totalThrows}/30 Würfe · ${getThrowLabel(totalThrows)}`
               }
             </p>
-            {isRecordingForAnotherPlayer && trainerAuth && (
+            {isRecordingForAnotherPlayer && trainer && (
               <p className="text-sm text-primary">
-                Mitschreiben für {player?.name} · Schreiber: {trainerAuth.name}
+                Mitschreiben für {player?.name} · Schreiber: {trainer.name}
               </p>
             )}
           </div>

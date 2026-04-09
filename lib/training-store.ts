@@ -12,6 +12,8 @@ type TrainingStore = {
   getTrainerMessages(): Promise<TrainerMessage[]>;
   saveTrainerMessage(message: Omit<TrainerMessage, 'id' | 'createdAt'>): Promise<TrainerMessage>;
   saveTrainer(trainer: Trainer): Promise<Trainer>;
+  saveTrainerWithSupabaseId(trainer: Trainer, supabaseUserId: string): Promise<Trainer>;
+  findTrainerBySupabaseId(supabaseUserId: string, email: string): Promise<Trainer | null>;
   findPlayerByCredentials(username: string, tempPassword: string): Promise<Player | null>;
   resetPlayerPassword(playerId: string): Promise<Player | null>;
 };
@@ -69,6 +71,14 @@ function localTrainingStore(): TrainingStore {
     getTrainerMessages: async () => serverDb.getTrainerMessages(),
     saveTrainerMessage: async (message) => serverDb.saveTrainerMessage(message),
     saveTrainer: async (trainer) => serverDb.saveTrainer(trainer),
+    saveTrainerWithSupabaseId: async (trainer, supabaseUserId) => {
+      const saved = await serverDb.saveTrainer(trainer);
+      return saved;
+    },
+    findTrainerBySupabaseId: async (supabaseUserId, email) => {
+      const trainers = serverDb.getTrainers ? serverDb.getTrainers() : [];
+      return trainers.find((t: Trainer) => t.email.toLowerCase() === email.toLowerCase()) || null;
+    },
     findPlayerByCredentials: async (username, tempPassword) => serverDb.findPlayerByCredentials(username, tempPassword),
     resetPlayerPassword: async (playerId) => serverDb.resetPlayerPassword(playerId),
   };
@@ -187,6 +197,32 @@ function postgresTrainingStore(): TrainingStore {
         [trainer.email, trainer.name, trainer.role]
       );
       return { email: String(result.rows[0].email), name: String(result.rows[0].name), role: 'trainer' };
+    },
+    saveTrainerWithSupabaseId: async (trainer, supabaseUserId) => {
+      const result = await pool.query(
+        `
+        INSERT INTO trainers (email, name, role, supabase_user_id)
+        VALUES ($1,$2,$3,$4)
+        ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, role = EXCLUDED.role, supabase_user_id = EXCLUDED.supabase_user_id
+        RETURNING *
+        `,
+        [trainer.email, trainer.name, trainer.role, supabaseUserId]
+      );
+      return { email: String(result.rows[0].email), name: String(result.rows[0].name), role: 'trainer' };
+    },
+    findTrainerBySupabaseId: async (supabaseUserId, email) => {
+      const result = await pool.query(
+        `
+        SELECT * FROM trainers
+        WHERE supabase_user_id = $1 OR lower(email) = lower($2)
+        LIMIT 1
+        `,
+        [supabaseUserId, email]
+      );
+      if (result.rows[0]) {
+        return { email: String(result.rows[0].email), name: String(result.rows[0].name), role: 'trainer' };
+      }
+      return null;
     },
     findPlayerByCredentials: async (username, tempPassword) => {
       const result = await pool.query(

@@ -2,35 +2,51 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Menubar from "@/components/menubar";
-import { LogIn, AlertCircle, Shield } from 'lucide-react';
-import { db } from '@/lib/db';
+import { LogIn, AlertCircle, Shield, Loader2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function TrainerLoginPage() {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { trainer, signIn } = useAuth();
 
   useEffect(() => {
-    const auth = localStorage.getItem('trainer_user');
-    if (auth) {
+    if (trainer) {
       router.push('/trainer/dashboard');
     }
-  }, [router]);
+  }, [trainer, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (email.includes('@')) {
-      const trainer = await db.loginTrainer(email);
-      if (trainer) {
-        localStorage.setItem('trainer_user', JSON.stringify(trainer));
-        router.push('/trainer/dashboard');
-      } else {
-        setError('Login fehlgeschlagen. Bitte versuche es erneut.');
-      }
-    } else {
+    setError('');
+    setLoading(true);
+
+    if (!email.includes('@')) {
       setError('Bitte gib eine gültige E-Mail-Adresse ein.');
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Das Passwort muss mindestens 6 Zeichen haben.');
+      setLoading(false);
+      return;
+    }
+
+    const result = await signIn(email, password);
+    
+    if (result.error) {
+      setError(result.error === 'Invalid login credentials' 
+        ? 'Ungültige E-Mail oder Passwort.' 
+        : result.error);
+      setLoading(false);
+    } else {
+      router.push('/trainer/dashboard');
     }
   };
 
@@ -43,9 +59,9 @@ export default function TrainerLoginPage() {
             <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4 text-primary">
               <Shield size={24} />
             </div>
-            <h1 className="text-2xl font-bold">Trainer-Bereich</h1>
+            <h1 className="text-2xl font-bold">Trainer Login</h1>
             <p className="text-muted-foreground mt-2 text-sm">
-              Melde dich mit deiner E-Mail an, um Spieler zu verwalten und Trainingsdaten einzusehen.
+              Melde dich mit deiner E-Mail und Passwort an, um Spieler zu verwalten und Trainingsdaten einzusehen.
             </p>
           </div>
 
@@ -54,20 +70,36 @@ export default function TrainerLoginPage() {
               <label htmlFor="email" className="text-sm font-medium ml-1">
                 E-Mail Adresse
               </label>
-              <div className="relative">
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setError('');
-                  }}
-                  placeholder="trainer@verein.de"
-                  className="w-full bg-muted border border-border rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                  required
-                />
-              </div>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError('');
+                }}
+                placeholder="trainer@verein.de"
+                className="w-full bg-muted border border-border rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium ml-1">
+                Passwort
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError('');
+                }}
+                placeholder="Dein Passwort"
+                className="w-full bg-muted border border-border rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                required
+              />
             </div>
 
             {error && (
@@ -79,12 +111,31 @@ export default function TrainerLoginPage() {
 
             <button
               type="submit"
-              className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+              disabled={loading}
+              className="w-full bg-primary text-primary-foreground font-bold py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <LogIn size={20} />
-              Einloggen
+              {loading ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  Anmelden...
+                </>
+              ) : (
+                <>
+                  <LogIn size={20} />
+                  Anmelden
+                </>
+              )}
             </button>
           </form>
+
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">
+              Noch kein Konto?{' '}
+              <Link href="/trainer/register" className="text-primary font-semibold hover:underline">
+                Jetzt registrieren
+              </Link>
+            </p>
+          </div>
 
           <div className="pt-6 border-t border-border mt-6">
             <p className="text-xs text-center text-muted-foreground">

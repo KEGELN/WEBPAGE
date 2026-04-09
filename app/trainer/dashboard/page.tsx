@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
 import { UserPlus, Users, Trash2, ChevronRight, BarChart3, LogOut, Search, User, History, Plus, ArrowLeft, MessageSquare, Send, Trophy } from 'lucide-react';
 import { Throw, Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface MirrorHistoryEntry {
   gameId: string;
@@ -33,7 +34,7 @@ interface MirrorPlayerProfile {
 
 export default function TrainerDashboard() {
   const router = useRouter();
-  const [trainer, setTrainer] = useState<Trainer | null>(null);
+  const { trainer, loading: authLoading, signOut } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [messages, setMessages] = useState<TrainerMessage[]>([]);
@@ -49,15 +50,16 @@ export default function TrainerDashboard() {
   const [showMobileList, setShowMobileList] = useState(true);
 
   useEffect(() => {
-    const auth = localStorage.getItem('trainer_user');
-    if (!auth) {
+    if (!authLoading && !trainer) {
       router.push('/trainer/login');
-      return;
     }
-    const trainerData = JSON.parse(auth);
-    setTrainer(trainerData);
-    refreshData(trainerData.email);
-  }, [router]);
+  }, [trainer, authLoading, router]);
+
+  useEffect(() => {
+    if (trainer) {
+      refreshData(trainer.email);
+    }
+  }, [trainer?.email]);
 
   const refreshData = async (email: string) => {
     setLoading(true);
@@ -110,8 +112,8 @@ export default function TrainerDashboard() {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('trainer_user');
+  const logout = async () => {
+    await signOut();
     router.push('/trainer/login');
   };
 
@@ -246,6 +248,14 @@ export default function TrainerDashboard() {
       throwItem,
     }));
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   if (!trainer) return null;
 
