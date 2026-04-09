@@ -12,9 +12,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    return NextResponse.json(await getMirrorStore().search(q));
+    const results = await getMirrorStore().search(q);
+    return NextResponse.json(results);
   } catch (error) {
-    console.error('Mirror search failed', error);
-    return NextResponse.json({ error: 'Mirror search failed' }, { status: 500 });
+    console.error('Mirror search failed:', error);
+    return NextResponse.json({ 
+      error: 'Mirror search failed',
+      players: [],
+      clubs: []
+    }, { status: 500 });
   }
 }
