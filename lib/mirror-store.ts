@@ -101,10 +101,11 @@ function supabaseMirrorStore() {
         return { found: false, playerName: name };
       }
 
-      const uniqueGameIds = [...new Set(rowsData.map((r: Record<string, unknown>) => r.game_id as string))];
+      const uniqueGameIds: string[] = rowsData.map((r: Record<string, unknown>) => r.game_id as string);
+      const uniqueGameIdSet = Array.from(new Set(uniqueGameIds));
       
       const gamesData = await Promise.all(
-        uniqueGameIds.slice(0, 50).map((gameId: string) => 
+        uniqueGameIdSet.slice(0, 50).map((gameId) => 
           supabaseQuery('games', {
             'game_id': `eq.${gameId}`,
             'select': 'game_id,game_date,game_time,team_home,team_away,result,league_context,matchday_label',
