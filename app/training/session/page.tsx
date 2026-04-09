@@ -2,9 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Menubar from '@/components/menubar';
 import { db, Player, Throw, Trainer, TrainingSession } from '@/lib/db';
-import { ArrowLeft, Check, CircleOff, Save, Trophy, Hash, Sparkles } from 'lucide-react';
+import { ArrowLeft, Check, CircleOff, Save, Trophy, Hash, Sparkles, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const pinLayout = [
@@ -33,10 +32,8 @@ function getThrownPins(throws: Throw[]) {
 function getDisabledPins(throws: Throw[]) {
   const throwInBlock = (throws.length % THROWS_PER_BLOCK) + 1;
   if (throwInBlock <= 15) return [];
-
   const clearingStart = Math.floor(throws.length / THROWS_PER_BLOCK) * THROWS_PER_BLOCK + 15;
   const alreadyHit = Array.from(new Set(getThrownPins(throws.slice(clearingStart))));
-
   return alreadyHit.length >= TOTAL_PINS ? [] : alreadyHit;
 }
 
@@ -51,18 +48,10 @@ function getScore(throws: Throw[]) {
 
 function getTrainingPlayer(trainer: Trainer | null): Player | null {
   if (typeof window === 'undefined') return null;
-
   const playerAuth = localStorage.getItem('player_auth');
-  if (playerAuth) {
-    return JSON.parse(playerAuth) as Player;
-  }
-
-  if (!trainer) {
-    return null;
-  }
-
+  if (playerAuth) return JSON.parse(playerAuth) as Player;
+  if (!trainer) return null;
   const trainerId = `T-${trainer.email.replace(/[^a-z0-9]/gi, '').slice(0, 10).toUpperCase()}`;
-
   return {
     id: trainerId,
     name: trainer.name,
@@ -77,11 +66,7 @@ function getTrainingPlayer(trainer: Trainer | null): Player | null {
 function TrainingSessionPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isMounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
+  const isMounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const { trainer } = useAuth();
   const authPlayer = useMemo(() => (isMounted ? getTrainingPlayer(trainer) : null), [isMounted, trainer]);
   const [player, setPlayer] = useState<Player | null>(null);
@@ -90,6 +75,8 @@ function TrainingSessionPageContent() {
   const [standardThrows, setStandardThrows] = useState<Throw[]>([]);
   const [lanes, setLanes] = useState<LaneRecord>({ 1: [], 2: [], 3: [], 4: [] });
   const [isSaving, setIsSaving] = useState(false);
+  const [showLanes, setShowLanes] = useState(false);
+  const [showQuickInput, setShowQuickInput] = useState(false);
 
   const mode = (searchParams.get('mode') === 'game_120' ? 'game_120' : 'standard') as GameMode;
   const activeLane = mode === 'game_120'
@@ -107,34 +94,21 @@ function TrainingSessionPageContent() {
   const remainingPins = isClearingPhase
     ? pinLayout.map((pin) => pin.id).filter((pin) => !disabledPins.includes(pin))
     : pinLayout.map((pin) => pin.id);
+  const sessionTotal = mode === 'game_120'
+    ? laneKeys.reduce((acc, lane) => acc + getScore(lanes[lane]), 0)
+    : getScore(standardThrows);
 
   useEffect(() => {
     if (!isMounted) return;
-    if (!authPlayer) {
-      router.push('/login');
-      return;
-    }
-
-    if (!isRecordingForAnotherPlayer) {
-      setPlayer(authPlayer);
-      return;
-    }
-
-    if (!trainer) {
-      router.push('/training');
-      return;
-    }
-
+    if (!authPlayer) { router.push('/login'); return; }
+    if (!isRecordingForAnotherPlayer) { setPlayer(authPlayer); return; }
+    if (!trainer) { router.push('/training'); return; }
     let cancelled = false;
-
     db.getPlayers(trainer.email)
       .then((players) => {
         if (cancelled) return;
         const targetPlayer = players.find((candidate) => candidate.id === targetPlayerId) ?? null;
-        if (!targetPlayer) {
-          router.push('/training');
-          return;
-        }
+        if (!targetPlayer) { router.push('/training'); return; }
         setPlayer(targetPlayer);
       })
       .catch((error) => {
@@ -142,10 +116,7 @@ function TrainingSessionPageContent() {
         console.error('Failed to load target training player:', error);
         router.push('/training');
       });
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [authPlayer, isMounted, isRecordingForAnotherPlayer, router, targetPlayerId, trainer]);
 
   useEffect(() => {
@@ -154,7 +125,6 @@ function TrainingSessionPageContent() {
 
   const togglePin = (pin: number) => {
     if (disabledPins.includes(pin) || isComplete) return;
-
     setSelectedPins((current) =>
       current.includes(pin)
         ? current.filter((entry) => entry !== pin)
@@ -165,92 +135,63 @@ function TrainingSessionPageContent() {
   const saveThrow = (isMiss = false) => {
     if (isComplete) return;
     if (!isMiss && selectedPins.length === 0) return;
-
     const nextThrow: Throw = {
       id: Date.now(),
       pins: isMiss ? [] : selectedPins,
       timestamp: new Date().toISOString(),
     };
-
     if (mode === 'game_120') {
-      setLanes((current) => ({
-        ...current,
-        [activeLane]: [...current[activeLane], nextThrow],
-      }));
+      setLanes((current) => ({ ...current, [activeLane]: [...current[activeLane], nextThrow] }));
     } else {
       setStandardThrows((current) => [...current, nextThrow]);
     }
-
     setSelectedPins([]);
     setQuickCount('');
   };
 
   const saveQuickThrow = () => {
     if (isComplete) return;
-
     const parsed = Number(quickCount);
     if (!Number.isInteger(parsed) || parsed < 0 || parsed > TOTAL_PINS) return;
-
     const quickPins = isClearingPhase
       ? remainingPins.slice(0, parsed)
       : Array.from({ length: parsed }, (_, index) => index + 1);
-
-    if (parsed > 0 && quickPins.length !== parsed) {
-      return;
-    }
-
+    if (parsed > 0 && quickPins.length !== parsed) return;
     const nextThrow: Throw = {
       id: Date.now(),
       pins: quickPins,
       timestamp: new Date().toISOString(),
     };
-
     if (mode === 'game_120') {
-      setLanes((current) => ({
-        ...current,
-        [activeLane]: [...current[activeLane], nextThrow],
-      }));
+      setLanes((current) => ({ ...current, [activeLane]: [...current[activeLane], nextThrow] }));
     } else {
       setStandardThrows((current) => [...current, nextThrow]);
     }
-
     setSelectedPins([]);
     setQuickCount('');
+    setShowQuickInput(false);
   };
 
   const saveSpecificPinsThrow = (pins: number[]) => {
     if (isComplete || pins.length === 0) return;
-
     const nextThrow: Throw = {
       id: Date.now(),
       pins: [...pins].sort((a, b) => a - b),
       timestamp: new Date().toISOString(),
     };
-
     if (mode === 'game_120') {
-      setLanes((current) => ({
-        ...current,
-        [activeLane]: [...current[activeLane], nextThrow],
-      }));
+      setLanes((current) => ({ ...current, [activeLane]: [...current[activeLane], nextThrow] }));
     } else {
       setStandardThrows((current) => [...current, nextThrow]);
     }
-
     setSelectedPins([]);
-    setQuickCount('');
   };
 
-  const saveStrike = () => {
-    saveSpecificPinsThrow(pinLayout.map((pin) => pin.id));
-  };
-
-  const saveClearedLane = () => {
-    saveSpecificPinsThrow(remainingPins);
-  };
+  const saveStrike = () => saveSpecificPinsThrow(pinLayout.map((pin) => pin.id));
+  const saveClearedLane = () => saveSpecificPinsThrow(remainingPins);
 
   const saveSession = async () => {
     if (!player || totalThrows === 0 || isSaving) return;
-
     const session: TrainingSession = {
       id: `session_${Date.now()}`,
       playerId: player.id,
@@ -263,9 +204,7 @@ function TrainingSessionPageContent() {
       throws: mode === 'standard' ? standardThrows : [],
       lanes: mode === 'game_120' ? lanes : undefined,
     };
-
     setIsSaving(true);
-
     try {
       await db.saveSession(session);
       router.push('/training');
@@ -274,252 +213,235 @@ function TrainingSessionPageContent() {
     }
   };
 
-  const sessionTotal = mode === 'game_120'
-    ? laneKeys.reduce((acc, lane) => acc + getScore(lanes[lane]), 0)
-    : getScore(standardThrows);
+  const selectLane = (lane: 1 | 2 | 3 | 4) => {
+    setLanes((current) => {
+      const newLanes = { ...current };
+      newLanes[lane] = [];
+      return newLanes;
+    });
+    setShowLanes(false);
+  };
 
   if (!isMounted || !player) return null;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <Menubar />
-      <main className="container mx-auto px-4 py-6 sm:py-10 space-y-6">
-        <section className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-2">
-            <button
-              onClick={() => router.push('/training')}
-              className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft size={16} />
-              Zurück zur Übersicht
-            </button>
-            <h1 className="text-2xl font-bold">
-              {mode === 'game_120' ? 'Wettkampfmodus' : 'Standardtraining'}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {mode === 'game_120'
-                ? `Bahn ${activeLane} von 4 · ${totalThrows}/120 Würfe`
-                : `${totalThrows}/30 Würfe · ${getThrowLabel(totalThrows)}`
-              }
-            </p>
-            {isRecordingForAnotherPlayer && trainer && (
-              <p className="text-sm text-primary">
-                Mitschreiben für {player?.name} · Schreiber: {trainer.name}
-              </p>
+    <div className="fixed inset-0 bg-background text-foreground flex flex-col">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
+        <button
+          onClick={() => router.push('/training')}
+          className="p-2 -ml-2 rounded-lg hover:bg-muted transition-colors"
+        >
+          <ArrowLeft size={24} />
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-xs text-muted-foreground">{player.name}</div>
+            <div className="font-bold">{sessionTotal} Holz</div>
+          </div>
+          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl ${
+            isComplete ? 'bg-green-500 text-white' : 'bg-primary text-primary-foreground'
+          }`}>
+            {totalThrows}/{mode === 'game_120' ? 120 : 30}
+          </div>
+        </div>
+        <button
+          onClick={() => setShowLanes(true)}
+          className="p-2 -mr-2 rounded-lg hover:bg-muted transition-colors"
+        >
+          <Trophy size={24} className={mode === 'game_120' ? 'text-primary' : 'text-muted-foreground'} />
+        </button>
+      </header>
+
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col justify-center px-4 py-6 space-y-4">
+          <div className="text-center text-sm text-muted-foreground">
+            {getThrowLabel(totalThrows)} • {isClearingPhase ? `${remainingPins.length} stehend` : '9 Pins'}
+          </div>
+
+          {showQuickInput ? (
+            <div className="space-y-4">
+              <button
+                onClick={() => setShowQuickInput(false)}
+                className="w-full p-3 rounded-xl border border-border text-sm text-muted-foreground"
+              >
+                <X size={20} className="inline mr-2" />
+                Abbrechen
+              </button>
+              <div className="flex gap-3">
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                  <button
+                    key={num}
+                    onClick={() => setQuickCount(String(num))}
+                    className={`flex-1 h-14 rounded-xl text-xl font-bold transition-all ${
+                      quickCount === String(num)
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted hover:bg-muted/80'
+                    }`}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={saveQuickThrow}
+                disabled={quickCount === '' || isComplete}
+                className="w-full h-16 rounded-2xl bg-primary text-primary-foreground font-bold text-xl disabled:opacity-50 active:scale-95 transition-transform"
+              >
+                <Check size={24} className="inline mr-2" />
+                Speichern ({quickCount || 0})
+              </button>
+            </div>
+          ) : (
+            <div className="relative mx-auto w-full max-w-sm aspect-square">
+              <div className="absolute inset-0 grid grid-cols-5 grid-rows-5 gap-2 p-4">
+                {pinLayout.map((pin) => {
+                  const isSelected = selectedPins.includes(pin.id);
+                  const isDisabled = disabledPins.includes(pin.id);
+                  return (
+                    <button
+                      key={pin.id}
+                      onClick={() => togglePin(pin.id)}
+                      style={{ gridColumn: pin.x + 1, gridRow: pin.y + 1 }}
+                      className={`rounded-full flex items-center justify-center text-2xl sm:text-3xl font-black transition-all active:scale-90 ${
+                        isSelected
+                          ? 'bg-primary text-primary-foreground shadow-lg'
+                          : isDisabled
+                            ? 'bg-muted text-muted-foreground opacity-40'
+                            : 'bg-card border-2 border-border hover:border-primary'
+                      } ${(isDisabled || isComplete) ? 'pointer-events-none' : ''}`}
+                    >
+                      {pin.id}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {showQuickInput ? null : (
+              <>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => saveThrow(true)}
+                    disabled={isComplete}
+                    className="flex-1 h-14 rounded-2xl bg-destructive/10 text-destructive font-bold disabled:opacity-50 active:scale-95 transition-transform"
+                  >
+                    <CircleOff size={24} className="inline mr-2" />
+                    0
+                  </button>
+                  <button
+                    onClick={() => saveThrow(false)}
+                    disabled={selectedPins.length === 0 || isComplete}
+                    className="flex-1 h-14 rounded-2xl bg-primary text-primary-foreground font-bold disabled:opacity-50 active:scale-95 transition-transform"
+                  >
+                    <Check size={24} className="inline mr-2" />
+                    {selectedPins.length || '?'}
+                  </button>
+                </div>
+
+                <div className="flex gap-3">
+                  {isClearingPhase ? (
+                    <button
+                      onClick={saveClearedLane}
+                      disabled={remainingPins.length === 0 || isComplete}
+                      className="flex-1 h-14 rounded-2xl bg-emerald-500 text-white font-bold disabled:opacity-50 active:scale-95 transition-transform"
+                    >
+                      <Sparkles size={24} className="inline mr-2" />
+                      Räumen ({remainingPins.length})
+                    </button>
+                  ) : (
+                    <button
+                      onClick={saveStrike}
+                      disabled={isComplete}
+                      className="flex-1 h-14 rounded-2xl bg-amber-500 text-white font-bold disabled:opacity-50 active:scale-95 transition-transform"
+                    >
+                      <Sparkles size={24} className="inline mr-2" />
+                      Strike!
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowQuickInput(true)}
+                    className="h-14 px-6 rounded-2xl bg-muted font-bold active:scale-95 transition-transform"
+                  >
+                    <Hash size={24} className="inline" />
+                  </button>
+                </div>
+              </>
             )}
           </div>
+        </div>
 
-          <div className="grid grid-cols-3 gap-3 sm:min-w-[320px]">
-            <div className="rounded-2xl border border-border bg-muted/40 p-4">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Spieler</div>
-              <div className="mt-1 text-sm font-semibold">{player.name}</div>
-            </div>
-            <div className="rounded-2xl border border-border bg-muted/40 p-4">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Holz</div>
-              <div className="mt-1 text-2xl font-black">{sessionTotal}</div>
-            </div>
-            <div className="rounded-2xl border border-border bg-muted/40 p-4">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Aktiv</div>
-              <div className="mt-1 text-sm font-semibold">{getThrowLabel(totalThrows)}</div>
-            </div>
-          </div>
-        </section>
-
-        {mode === 'game_120' && (
-          <section className="grid gap-3 sm:grid-cols-4">
-            {laneKeys.map((lane) => {
-              const laneThrows = lanes[lane];
-              const isLaneActive = lane === activeLane && laneThrows.length < THROWS_PER_BLOCK;
-
-              return (
-                <div
-                  key={lane}
-                  className={`rounded-2xl border p-4 transition-colors ${
-                    isLaneActive ? 'border-primary bg-primary/5' : 'border-border bg-card'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-bold">Bahn {lane}</div>
-                    <Trophy size={16} className={isLaneActive ? 'text-primary' : 'text-muted-foreground'} />
+        <div className="border-t border-border bg-card">
+          <div className="flex gap-1 overflow-x-auto px-4 py-3 -mx-4 scrollbar-hide">
+            {activeThrows.length === 0 ? (
+              <div className="w-full text-center text-sm text-muted-foreground py-4">
+                Noch keine Würfe
+              </div>
+            ) : (
+              activeThrows.slice(-15).map((throwItem, index) => {
+                const actualIndex = Math.max(0, activeThrows.length - 15) + index;
+                return (
+                  <div
+                    key={throwItem.id}
+                    className="flex-shrink-0 w-12 h-14 rounded-xl bg-muted flex flex-col items-center justify-center"
+                  >
+                    <span className="text-lg font-bold">
+                      {throwItem.pins.length || 'X'}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {actualIndex + 1}
+                    </span>
                   </div>
-                  <div className="mt-2 text-2xl font-black">{getScore(laneThrows)}</div>
-                  <div className="text-xs text-muted-foreground">{laneThrows.length}/30 Würfe</div>
-                </div>
-              );
-            })}
-          </section>
-        )}
+                );
+              })
+            )}
+          </div>
+          <button
+            onClick={saveSession}
+            disabled={totalThrows === 0 || isSaving}
+            className="w-full h-14 bg-green-600 text-white font-bold disabled:opacity-50 active:scale-95 transition-transform"
+          >
+            <Save size={20} className="inline mr-2" />
+            {isSaving ? 'Speichern...' : 'Training beenden'}
+          </button>
+        </div>
+      </main>
 
-        <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold">Pins erfassen</h2>
-                <p className="text-sm text-muted-foreground">
-                  Ab Wurf 16 bleiben getroffene Pins gesperrt, bis alle 9 gefallen sind.
-                </p>
-              </div>
-              <div className="rounded-full bg-muted px-3 py-1 text-xs font-bold uppercase text-muted-foreground">
-                {selectedPins.length} ausgewählt
-              </div>
-            </div>
-
-            <div className="mx-auto grid w-fit grid-cols-5 gap-3 rounded-[2rem] bg-muted/30 p-5">
-              {pinLayout.map((pin) => {
-                const isSelected = selectedPins.includes(pin.id);
-                const isDisabled = disabledPins.includes(pin.id);
-
+      {showLanes && (
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+          <div className="bg-card w-full sm:w-auto sm:rounded-3xl p-6 sm:p-8 space-y-4 max-w-md">
+            <h2 className="text-xl font-bold text-center">Bahn wählen</h2>
+            <div className="grid grid-cols-2 gap-4">
+              {laneKeys.map((lane) => {
+                const laneThrows = lanes[lane];
+                const isComplete = laneThrows.length >= THROWS_PER_BLOCK;
                 return (
                   <button
-                    key={pin.id}
-                    type="button"
-                    onClick={() => togglePin(pin.id)}
-                    style={{ gridColumnStart: pin.x + 1, gridRowStart: pin.y + 1 }}
-                    className={`flex h-14 w-14 items-center justify-center rounded-full border text-lg font-black transition-all ${
-                      isSelected
-                        ? 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                        : isDisabled
-                          ? 'cursor-not-allowed border-border bg-muted text-muted-foreground opacity-45'
-                          : 'border-border bg-card hover:border-primary hover:text-primary'
+                    key={lane}
+                    onClick={() => selectLane(lane)}
+                    className={`p-6 rounded-2xl border-2 text-center ${
+                      isComplete
+                        ? 'border-green-500 bg-green-500/10'
+                        : 'border-border hover:border-primary'
                     }`}
-                    disabled={isDisabled || isComplete}
                   >
-                    {pin.id}
+                    <div className="text-3xl font-black">{lane}</div>
+                    <div className="text-sm text-muted-foreground">{getScore(laneThrows)} / 120</div>
+                    <div className="text-xs text-muted-foreground">{laneThrows.length} Würfe</div>
                   </button>
                 );
               })}
             </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <button
-                onClick={() => setSelectedPins([])}
-                className="rounded-2xl border border-border px-4 py-3 text-sm font-semibold transition-colors hover:bg-muted"
-              >
-                Auswahl löschen
-              </button>
-              {isClearingPhase ? (
-                <button
-                  onClick={saveClearedLane}
-                  disabled={remainingPins.length === 0 || isComplete}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/15 disabled:opacity-50"
-                >
-                  <Sparkles size={16} />
-                  Fertig geräumt
-                </button>
-              ) : (
-                <button
-                  onClick={saveStrike}
-                  disabled={isComplete}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
-                >
-                  <Sparkles size={16} />
-                  9 / Strike
-                </button>
-              )}
-            </div>
-
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <button
-                onClick={() => saveThrow(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/15"
-              >
-                <CircleOff size={16} />
-                Fehlwurf
-              </button>
-              <button
-                onClick={() => saveThrow(false)}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-                disabled={selectedPins.length === 0 || isComplete}
-              >
-                <Check size={16} />
-                Wurf speichern
-              </button>
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-border bg-muted/20 p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <Hash size={16} className="text-primary" />
-                Schnelle Eingabe
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Falls dir die einzelnen Pins egal sind, gib nur die gefallene Zahl ein. Im Abräumen werden dabei nur noch stehende Pins gezählt.
-              </p>
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                <input
-                  type="number"
-                  min="0"
-                  max={isClearingPhase ? String(remainingPins.length) : '9'}
-                  value={quickCount}
-                  onChange={(event) => setQuickCount(event.target.value)}
-                  className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30 sm:max-w-[180px]"
-                  placeholder={isClearingPhase ? `0-${remainingPins.length}` : '0-9'}
-                />
-                <button
-                  onClick={saveQuickThrow}
-                  disabled={quickCount === '' || isComplete}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
-                >
-                  <Check size={16} />
-                  Zahl speichern
-                </button>
-              </div>
-            </div>
+            <button
+              onClick={() => setShowLanes(false)}
+              className="w-full h-12 rounded-xl border border-border font-semibold"
+            >
+              Abbrechen
+            </button>
           </div>
-
-          <div className="space-y-6">
-            <section className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold">Live-Protokoll</h2>
-                <span className="text-xs text-muted-foreground">
-                  {mode === 'game_120' ? `Bahn ${activeLane}` : 'Bahn 1'}
-                </span>
-              </div>
-              <div className="max-h-[380px] space-y-2 overflow-y-auto pr-1">
-                {activeThrows.length === 0 ? (
-                  <div className="rounded-2xl border-2 border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                    Noch keine Würfe erfasst.
-                  </div>
-                ) : (
-                  activeThrows.map((throwItem, index) => (
-                    <div key={throwItem.id} className="flex items-center justify-between rounded-2xl border border-border bg-muted/20 px-4 py-3">
-                      <div>
-                        <div className="text-sm font-semibold">Wurf {index + 1}</div>
-                        <div className="text-xs text-muted-foreground">{getThrowLabel(index)}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {throwItem.pins.length === 0 ? (
-                          <span className="rounded-full bg-destructive/10 px-3 py-1 text-xs font-bold text-destructive">Fehlwurf</span>
-                        ) : (
-                          throwItem.pins.map((pin) => (
-                            <span key={`${throwItem.id}-${pin}`} className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                              {pin}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-              <h2 className="text-lg font-bold">Session speichern</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Du kannst jederzeit speichern. Für den Wettkampf werden alle vier Bahnen zusammen abgelegt.
-              </p>
-              <button
-                onClick={saveSession}
-                disabled={totalThrows === 0 || isSaving}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                <Save size={16} />
-                {isSaving ? 'Speichert...' : 'Session speichern'}
-              </button>
-            </section>
-          </div>
-        </section>
-      </main>
+        </div>
+      )}
     </div>
   );
 }
