@@ -36,6 +36,7 @@ function createPool(connectionString: string) {
 
   const poolConfig: PoolConfig = {
     connectionString: finalConnectionString,
+    ssl: isSupabase ? { rejectUnauthorized: false } : false,
     max: isVercel ? 2 : 5,
     idleTimeoutMillis: isVercel ? 10000 : 30000,
     connectionTimeoutMillis: isVercel ? 5000 : 10000,
