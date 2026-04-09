@@ -19,6 +19,10 @@ export default function ResetPasswordPage() {
   const router = useRouter();
 
   useEffect(() => {
+    if (!supabase) {
+      setInvalidToken(true);
+      return;
+    }
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -31,6 +35,11 @@ export default function ResetPasswordPage() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!supabase) {
+      setError('Auth ist nicht konfiguriert.');
+      return;
+    }
 
     if (password.length < 6) {
       setError('Das Passwort muss mindestens 6 Zeichen haben.');

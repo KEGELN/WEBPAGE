@@ -23,6 +23,12 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    if (!supabase) {
+      setError('Auth ist nicht konfiguriert.');
+      setLoading(false);
+      return;
+    }
+
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/trainer/reset-password`,
     });
