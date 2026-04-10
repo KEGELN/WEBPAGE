@@ -9,6 +9,10 @@ import {
 
 type MirrorSearch = ReturnType<typeof searchLocalMirror>;
 
+function decodePlayerKey(key: string): string {
+  return Buffer.from(key, 'base64url').toString('utf-8');
+}
+
 function localMirrorStore() {
   return {
     search: (query: string) => searchLocalMirror(query),
@@ -22,10 +26,6 @@ function parseResultScore(result: string | null) {
   const match = String(result || '').match(/(\d+)\s*:\s*(\d+)/);
   if (!match) return null;
   return { home: Number(match[1]), away: Number(match[2]) };
-}
-
-function decodePlayerKey(key: string): string {
-  return Buffer.from(key, 'base64url').toString('utf-8');
 }
 
 function getSupabaseUrl() {
@@ -81,7 +81,8 @@ function supabaseMirrorStore() {
 
       return {
         players: (playersData || []).map((row: Record<string, unknown>) => ({
-          id: String(row.player_key || ''),
+          id: Buffer.from(String(row.player_key || '')).toString('base64url'),
+          rawId: String(row.player_key || ''),
           name: String(row.player_name || ''),
           club: String(row.club_name ?? ''),
           gameCount: Number(row.game_count ?? 0),
@@ -95,17 +96,19 @@ function supabaseMirrorStore() {
       };
     },
     playerProfile: async (playerKey: string): Promise<MirrorPlayerProfile> => {
-      const playerName = decodePlayerKey(playerKey);
+      const decodedKey = Buffer.from(playerKey, 'base64url').toString('utf-8');
       
       const playerData = await supabaseQuery('player_search_index', {
-        'player_key': `eq.${playerKey}`,
+        'player_key': `eq.${decodedKey}`,
         'select': 'player_name,club_name',
         'limit': '1',
       });
 
       if (!playerData || playerData.length === 0) {
-        return { found: false, playerName };
+        return { found: false, playerName: decodedKey };
       }
+
+      const playerName = String(playerData[0].player_name);
 
       const rowsData = await supabaseQuery('game_player_rows', {
         'or': `(player_home.eq.${encodeURIComponent(playerName)}),(player_away.eq.${encodeURIComponent(playerName)})`,
