@@ -1,6 +1,7 @@
-import type { Player, Trainer, TrainerMessage, TrainingSession } from '@/lib/db';
+import type { Player, Trainer, TrainerMessage, TrainingSession, Club, ClubMember, ClubChatMessage, ClubAttendancePoll } from '@/lib/db';
 import { getTrainingPool, hasTrainingDatabase } from '@/lib/postgres';
 import { serverDb } from '@/lib/server-db';
+import { getSupabaseServiceRoleClient } from '@/lib/supabase';
 
 type TrainingStore = {
   getPlayers(): Promise<Player[]>;
@@ -22,7 +23,7 @@ function createId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function mapPlayer(row: Record<string, unknown>): Player {
+function mapPlayer(row: Record<string, any>): Player {
   return {
     id: String(row.id),
     name: String(row.name),
@@ -35,7 +36,7 @@ function mapPlayer(row: Record<string, unknown>): Player {
   };
 }
 
-function mapSession(row: Record<string, unknown>): TrainingSession {
+function mapSession(row: Record<string, any>): TrainingSession {
   return {
     id: String(row.id),
     playerId: String(row.player_id),
@@ -50,7 +51,7 @@ function mapSession(row: Record<string, unknown>): TrainingSession {
   };
 }
 
-function mapMessage(row: Record<string, unknown>): TrainerMessage {
+function mapMessage(row: Record<string, any>): TrainerMessage {
   return {
     id: String(row.id),
     playerId: String(row.player_id),
@@ -81,6 +82,133 @@ function localTrainingStore(): TrainingStore {
     },
     findPlayerByCredentials: async (username, tempPassword) => serverDb.findPlayerByCredentials(username, tempPassword),
     resetPlayerPassword: async (playerId) => serverDb.resetPlayerPassword(playerId),
+  };
+}
+
+function supabaseTrainingStore(): TrainingStore {
+  const client = getSupabaseServiceRoleClient();
+  if (!client) return localTrainingStore();
+
+  return {
+    getPlayers: async () => {
+      const { data, error } = await client.from('training_players').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(mapPlayer);
+    },
+    savePlayer: async (player) => {
+      const { data, error } = await client.from('training_players').insert({
+        id: player.id,
+        name: player.name,
+        mirror_player_name: player.mirrorPlayerName ?? null,
+        trainer_email: player.trainerEmail,
+        created_at: player.createdAt,
+        username: player.username,
+        temp_password: player.tempPassword,
+        password_reset_required: player.passwordResetRequired,
+      }).select().single();
+      if (error) throw error;
+      return mapPlayer(data);
+    },
+    updatePlayer: async (player) => {
+      const { data, error } = await client.from('training_players').update({
+        name: player.name,
+        mirror_player_name: player.mirrorPlayerName ?? null,
+        trainer_email: player.trainerEmail,
+        username: player.username,
+        temp_password: player.tempPassword,
+        password_reset_required: player.passwordResetRequired,
+      }).eq('id', player.id).select().single();
+      if (error) return null;
+      return mapPlayer(data);
+    },
+    deletePlayer: async (id) => {
+      await client.from('training_players').delete().eq('id', id);
+    },
+    getSessions: async () => {
+      const { data, error } = await client.from('training_sessions').select('*').order('timestamp', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(mapSession);
+    },
+    saveSession: async (session) => {
+      const { data, error } = await client.from('training_sessions').insert({
+        id: session.id,
+        player_id: session.playerId,
+        player_name: session.playerName ?? null,
+        trainer_email: session.trainerEmail,
+        timestamp: session.timestamp,
+        type: session.type,
+        recorder_id: session.recorderId ?? null,
+        recorder_name: session.recorderName ?? null,
+        throws_json: session.throws ?? [],
+        lanes_json: session.lanes ?? null,
+      }).select().single();
+      if (error) throw error;
+      return mapSession(data);
+    },
+    getTrainerMessages: async () => {
+      const { data, error } = await client.from('trainer_messages').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(mapMessage);
+    },
+    saveTrainerMessage: async (message) => {
+      const id = createId('msg');
+      const { data, error } = await client.from('trainer_messages').insert({
+        id,
+        player_id: message.playerId,
+        trainer_email: message.trainerEmail,
+        text: message.text,
+      }).select().single();
+      if (error) throw error;
+      return mapMessage(data);
+    },
+    saveTrainer: async (trainer) => {
+      const { data, error } = await client.from('trainers').upsert({
+        email: trainer.email,
+        name: trainer.name,
+        role: trainer.role,
+      }, { onConflict: 'email' }).select().single();
+      if (error) throw error;
+      return { email: String(data.email), name: String(data.name), role: 'trainer' };
+    },
+    saveTrainerWithSupabaseId: async (trainer, supabaseUserId) => {
+      const { data, error } = await client.from('trainers').upsert({
+        email: trainer.email,
+        name: trainer.name,
+        role: trainer.role,
+        supabase_user_id: supabaseUserId,
+      }, { onConflict: 'email' }).select().single();
+      if (error) throw error;
+      return { email: String(data.email), name: String(data.name), role: 'trainer' };
+    },
+    findTrainerBySupabaseId: async (supabaseUserId, email) => {
+      const { data, error } = await client.from('trainers')
+        .select('*')
+        .or(`supabase_user_id.eq.${supabaseUserId},email.ilike.${email}`)
+        .limit(1)
+        .maybeSingle();
+      if (error || !data) return null;
+      return { email: String(data.email), name: String(data.name), role: 'trainer' };
+    },
+    findPlayerByCredentials: async (username, tempPassword) => {
+      const { data, error } = await client.from('training_players')
+        .select('*')
+        .ilike('username', username.trim())
+        .eq('temp_password', tempPassword.trim().toUpperCase())
+        .limit(1)
+        .maybeSingle();
+      if (error || !data) return null;
+      return mapPlayer(data);
+    },
+    resetPlayerPassword: async (playerId) => {
+      const nextPassword = Math.random().toString(36).slice(2, 8).toUpperCase();
+      const { data, error } = await client.from('training_players')
+        .update({ temp_password: nextPassword, password_reset_required: true })
+        .eq('id', playerId)
+        .select()
+        .single();
+      if (error) return null;
+      return mapPlayer(data);
+    },
   };
 }
 
@@ -252,5 +380,8 @@ function postgresTrainingStore(): TrainingStore {
 }
 
 export function getTrainingStore(): TrainingStore {
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return supabaseTrainingStore();
+  }
   return hasTrainingDatabase() ? postgresTrainingStore() : localTrainingStore();
 }
