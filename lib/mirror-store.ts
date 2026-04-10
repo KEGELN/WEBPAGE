@@ -110,10 +110,10 @@ function supabaseMirrorStore() {
       }
 
       const playerName = String(playerData[0].player_name);
-      const firstName = playerName.split(',')[0].trim();
+      const searchPattern = playerName.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
 
       const rowsData = await supabaseQuery('game_player_rows', {
-        'or': `(player_home.like.*${firstName}*),(player_away.like.*${firstName}*)`,
+        'or': `(player_home.like.*${searchPattern}*),(player_away.like.*${searchPattern}*)`,
         'select': 'game_id,player_home,total_home,sp_home,mp_home,player_away,total_away,sp_away,mp_away',
         'order': 'game_id.desc',
         'limit': '200',
