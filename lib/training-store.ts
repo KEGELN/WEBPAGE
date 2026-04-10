@@ -72,9 +72,7 @@ function localTrainingStore(): TrainingStore {
     saveTrainerMessage: async (message) => serverDb.saveTrainerMessage(message),
     saveTrainer: async (trainer) => serverDb.saveTrainer(trainer),
     saveTrainerWithSupabaseId: async (trainer, supabaseUserId) => {
-      console.log('localTrainingStore.saveTrainerWithSupabaseId called', trainer, supabaseUserId);
       const saved = await serverDb.saveTrainer(trainer);
-      console.log('localTrainingStore.saveTrainer result:', saved);
       return saved;
     },
     findTrainerBySupabaseId: async (supabaseUserId, email) => {
@@ -201,7 +199,6 @@ function postgresTrainingStore(): TrainingStore {
       return { email: String(result.rows[0].email), name: String(result.rows[0].name), role: 'trainer' };
     },
     saveTrainerWithSupabaseId: async (trainer, supabaseUserId) => {
-      console.log('postgresTrainingStore.saveTrainerWithSupabaseId called with', trainer, supabaseUserId);
       const result = await pool.query(
         `
         INSERT INTO trainers (email, name, role, supabase_user_id)

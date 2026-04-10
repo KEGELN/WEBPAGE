@@ -29,14 +29,11 @@ export async function POST(request: NextRequest) {
   
   try {
     body = await parseBody(request);
-  } catch (parseError) {
-    console.error('Failed to parse body:', parseError);
-    return NextResponse.json({ error: 'Failed to parse request body', details: String(parseError) }, { status: 400 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to parse request body' }, { status: 400 });
   }
   
   const { action, email, playerId, username, tempPassword, supabaseUserId, name } = body;
-  
-  console.log('Training auth request:', { action, email, supabaseUserId, name });
   
   try {
 
@@ -49,7 +46,6 @@ export async function POST(request: NextRequest) {
         name: name || email.split('@')[0],
         role: 'trainer',
       };
-      console.log('Saving trainer:', trainer, 'supabaseUserId:', supabaseUserId);
       await getTrainingStore().saveTrainerWithSupabaseId(trainer, supabaseUserId);
       return NextResponse.json(trainer);
     }
