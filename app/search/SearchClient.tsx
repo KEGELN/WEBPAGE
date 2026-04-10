@@ -37,7 +37,7 @@ export default function SearchClient() {
           throw new Error(`Search failed: ${res.status}`);
         }
         const payload = (await res.json()) as {
-          players: Array<{ name: string; club: string; gameCount: number }>;
+          players: Array<{ id: string; name: string; club: string; gameCount: number }>;
           clubs: Array<{ name: string; gameCount: number }>;
         };
 
