@@ -50,7 +50,8 @@ async function supabaseQuery(table: string, params: Record<string, string> = {})
   });
 
   if (!response.ok) {
-    throw new Error(`Supabase error: ${response.status}`);
+    const text = await response.text();
+    throw new Error(`Supabase error: ${response.status} - ${text}`);
   }
 
   return response.json();
@@ -109,9 +110,10 @@ function supabaseMirrorStore() {
       }
 
       const playerName = String(playerData[0].player_name);
+      const firstName = playerName.split(',')[0].trim();
 
       const rowsData = await supabaseQuery('game_player_rows', {
-        'or': `(player_home.eq.${encodeURIComponent(playerName)}),(player_away.eq.${encodeURIComponent(playerName)})`,
+        'or': `(player_home.like.*${firstName}*),(player_away.like.*${firstName}*)`,
         'select': 'game_id,player_home,total_home,sp_home,mp_home,player_away,total_away,sp_away,mp_away',
         'order': 'game_id.desc',
         'limit': '200',
