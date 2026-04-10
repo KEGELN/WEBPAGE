@@ -37,6 +37,8 @@ export async function POST(request: NextRequest) {
       name?: string;
     };
     
+    console.log('Training auth action:', action, 'email:', email);
+
     if (action === 'create-trainer') {
       if (!email || !supabaseUserId) {
         return NextResponse.json({ error: 'Email and supabaseUserId required' }, { status: 400 });
@@ -46,6 +48,7 @@ export async function POST(request: NextRequest) {
         name: name || email.split('@')[0],
         role: 'trainer',
       };
+      console.log('Saving trainer:', trainer, 'supabaseUserId:', supabaseUserId);
       await getTrainingStore().saveTrainerWithSupabaseId(trainer, supabaseUserId);
       return NextResponse.json(trainer);
     }
@@ -83,7 +86,8 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-  } catch {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  } catch (error) {
+    console.error('Training auth error:', error);
+    return NextResponse.json({ error: 'Invalid request', details: String(error) }, { status: 400 });
   }
 }
