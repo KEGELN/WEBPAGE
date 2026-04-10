@@ -110,19 +110,19 @@ function supabaseMirrorStore() {
       }
 
       const playerName = String(playerData[0].player_name);
-      const normalizedSearch = playerName.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
+      const firstName = playerName.split(',')[0].trim();
 
       const rowsData = await supabaseQuery('game_player_rows', {
-        'or': `(player_home.like.*${normalizedSearch}*),(player_away.like.*${normalizedSearch}*)`,
+        'or': `(player_home.like.*${firstName}*),(player_away.like.*${firstName}*)`,
         'select': 'game_id,player_home,total_home,sp_home,mp_home,player_away,total_away,sp_away,mp_away',
         'order': 'game_id.desc',
         'limit': '200',
       });
 
       const filteredRows = (rowsData || []).filter((r: Record<string, unknown>) => {
-        const home = String(r.player_home ?? '').toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
-        const away = String(r.player_away ?? '').toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
-        return home.includes(normalizedSearch) || away.includes(normalizedSearch);
+        const home = String(r.player_home ?? '');
+        const away = String(r.player_away ?? '');
+        return home === playerName || away === playerName;
       });
 
       if (filteredRows.length === 0) {
@@ -157,9 +157,7 @@ function supabaseMirrorStore() {
 
         const homeRaw = String(row.player_home ?? '');
         const awayRaw = String(row.player_away ?? '');
-        const homeNormalized = homeRaw.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
-        const awayNormalized = awayRaw.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
-        const isHome = homeNormalized.includes(normalizedSearch);
+        const isHome = homeRaw === playerName;
         const playerTotal = isHome ? String(row.total_home ?? '') : String(row.total_away ?? '');
         const playerSp = isHome ? String(row.sp_home ?? '') : String(row.sp_away ?? '');
         const playerMp = isHome ? String(row.mp_home ?? '') : String(row.mp_away ?? '');
