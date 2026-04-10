@@ -199,6 +199,7 @@ function postgresTrainingStore(): TrainingStore {
       return { email: String(result.rows[0].email), name: String(result.rows[0].name), role: 'trainer' };
     },
     saveTrainerWithSupabaseId: async (trainer, supabaseUserId) => {
+      console.log('postgresTrainingStore.saveTrainerWithSupabaseId called with', trainer, supabaseUserId);
       const result = await pool.query(
         `
         INSERT INTO trainers (email, name, role, supabase_user_id)
