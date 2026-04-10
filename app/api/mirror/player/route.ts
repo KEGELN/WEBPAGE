@@ -5,14 +5,14 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const name = searchParams.get('name')?.trim();
+  const playerKey = searchParams.get('id')?.trim();
 
-  if (!name) {
-    return NextResponse.json({ error: 'Missing name' }, { status: 400 });
+  if (!playerKey) {
+    return NextResponse.json({ error: 'Missing player ID' }, { status: 400 });
   }
 
   try {
-    const profile = await getMirrorStore().playerProfile(name);
+    const profile = await getMirrorStore().playerProfile(playerKey);
     if (!profile.found) {
       return NextResponse.json(profile, { status: 404 });
     }

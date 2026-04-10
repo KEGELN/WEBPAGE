@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Menubar from '@/components/menubar';
-import PlayerService, { type PlayerHistoryEntry } from '@/lib/player-service';
+import { type PlayerHistoryEntry } from '@/lib/player-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import GameResultTable from '@/components/GameResultTable';
 
@@ -20,6 +20,7 @@ interface PlayerStats {
 }
 
 interface PlayerSearchMatch {
+  id: string;
   name: string;
   club: string;
   gameCount: number;
@@ -59,7 +60,7 @@ function buildPolyline(values: number[], width: number, height: number) {
 export default function PlayerClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const playerName = searchParams.get('name') || searchParams.get('player') || searchParams.get('id');
+  const playerId = searchParams.get('id') || searchParams.get('name') || searchParams.get('player');
 
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,12 +71,11 @@ export default function PlayerClient() {
   const [openGameId, setOpenGameId] = useState<string | null>(null);
   const [gameDetails, setGameDetails] = useState<Record<string, GameDetailRow[]>>({});
 
-  const playerService = useMemo(() => new PlayerService(), []);
   const history = playerStats?.history || [];
   const graphValues = history.slice().reverse().map((entry) => parseHolz(entry.holz));
 
   useEffect(() => {
-    if (!playerName) return;
+    if (!playerId) return;
 
     let cancelled = false;
     const fetchData = async () => {
@@ -83,7 +83,8 @@ export default function PlayerClient() {
       setError(null);
 
       try {
-        const stats = (await playerService.getPlayerStats(playerName)) as PlayerStats;
+        const res = await fetch(`/api/mirror/player?id=${encodeURIComponent(playerId)}`);
+        const stats = (await res.json()) as PlayerStats;
         if (!cancelled) {
           setPlayerStats(stats);
         }
@@ -103,7 +104,7 @@ export default function PlayerClient() {
     return () => {
       cancelled = true;
     };
-  }, [playerName, playerService]);
+  }, [playerId]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -149,17 +150,17 @@ export default function PlayerClient() {
       const first = searchResults[0];
       setQuery(first.name);
       setSearchResults([]);
-      router.push(`/player?name=${encodeURIComponent(first.name)}`);
+      router.push(`/player?id=${encodeURIComponent(first.id)}`);
       return;
     }
     if (!query.trim()) return;
     router.push(`/player?name=${encodeURIComponent(query.trim())}`);
   };
 
-  const selectPlayerResult = (name: string) => {
-    setQuery(name);
+  const selectPlayerResult = (result: PlayerSearchMatch) => {
+    setQuery(result.name);
     setSearchResults([]);
-    router.push(`/player?name=${encodeURIComponent(name)}`);
+    router.push(`/player?id=${encodeURIComponent(result.id)}`);
   };
 
   const toggleGame = async (gameId: string) => {
@@ -187,9 +188,9 @@ export default function PlayerClient() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Spielerprofil</div>
-              <h1 className="text-3xl font-bold text-foreground">{playerName ? (playerStats?.playerName || playerName) : 'Spieler'}</h1>
+              <h1 className="text-3xl font-bold text-foreground">{playerStats?.playerName || 'Spieler'}</h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                {playerName
+                {playerId
                   ? 'Gespiegelte Sportwinner-Historie mit Ergebnisdetails.'
                   : 'Suche einen Spieler, um Profil, Trend und letzte Ergebnisse zu sehen.'}
               </p>
@@ -213,9 +214,9 @@ export default function PlayerClient() {
                   {!searchLoading &&
                     searchResults.map((result) => (
                       <button
-                        key={`${result.name}-${result.club}`}
+                        key={`${result.id}`}
                         type="button"
-                        onClick={() => selectPlayerResult(result.name)}
+                        onClick={() => selectPlayerResult(result)}
                         className="flex w-full items-start justify-between gap-4 border-t border-border px-4 py-3 text-left first:border-t-0 hover:bg-muted/30"
                       >
                         <div>
@@ -231,7 +232,7 @@ export default function PlayerClient() {
           </div>
         </div>
 
-        {!playerName && (
+        {!playerId && (
           <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
             <p className="text-muted-foreground">Kein Spieler ausgewählt. Gib oben einen vollständigen Namen ein oder nutze die Suche.</p>
           </div>
@@ -245,16 +246,16 @@ export default function PlayerClient() {
           </div>
         )}
 
-        {!loading && !error && playerName && playerStats && !playerStats.found && (
+        {!loading && !error && playerId && playerStats && !playerStats.found && (
           <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
             <h2 className="text-2xl font-bold">Kein Datensatz gefunden</h2>
             <p className="mt-2 text-muted-foreground">
-              Für {playerName} gibt es noch keine importierten Sportwinner-Ergebnisse.
+              Für diesen Spieler gibt es noch keine importierten Sportwinner-Ergebnisse.
             </p>
           </div>
         )}
 
-        {!loading && !error && playerName && playerStats?.found && (
+        {!loading && !error && playerId && playerStats?.found && (
           <div className="space-y-8">
             <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
               <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">

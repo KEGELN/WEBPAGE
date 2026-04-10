@@ -12,7 +12,7 @@ type MirrorSearch = ReturnType<typeof searchLocalMirror>;
 function localMirrorStore() {
   return {
     search: (query: string) => searchLocalMirror(query),
-    playerProfile: (name: string) => getLocalMirrorPlayerProfile(name),
+    playerProfile: (playerKey: string) => getLocalMirrorPlayerProfile(decodePlayerKey(playerKey)),
     clubProfile: (name: string) => getLocalMirrorClubProfile(name),
     gameDetail: (gameId: string) => getLocalMirrorGameDetail(gameId),
   };
@@ -22,6 +22,10 @@ function parseResultScore(result: string | null) {
   const match = String(result || '').match(/(\d+)\s*:\s*(\d+)/);
   if (!match) return null;
   return { home: Number(match[1]), away: Number(match[2]) };
+}
+
+function decodePlayerKey(key: string): string {
+  return Buffer.from(key, 'base64url').toString('utf-8');
 }
 
 function getSupabaseUrl() {
@@ -63,7 +67,7 @@ function supabaseMirrorStore() {
       
       const playersData = await supabaseQuery('player_search_index', {
         'normalized_name': `ilike.*${normalized}*`,
-        'select': 'player_name,club_name,game_count,last_game_date',
+        'select': 'player_key,player_name,club_name,game_count,last_game_date',
         'order': 'game_count.desc,last_game_date.desc',
         'limit': '12',
       });
@@ -77,6 +81,7 @@ function supabaseMirrorStore() {
 
       return {
         players: (playersData || []).map((row: Record<string, unknown>) => ({
+          id: String(row.player_key || ''),
           name: String(row.player_name || ''),
           club: String(row.club_name ?? ''),
           gameCount: Number(row.game_count ?? 0),
@@ -89,23 +94,34 @@ function supabaseMirrorStore() {
         })),
       };
     },
-    playerProfile: async (name: string): Promise<MirrorPlayerProfile> => {
+    playerProfile: async (playerKey: string): Promise<MirrorPlayerProfile> => {
+      const playerName = decodePlayerKey(playerKey);
+      
+      const playerData = await supabaseQuery('player_search_index', {
+        'player_key': `eq.${playerKey}`,
+        'select': 'player_name,club_name',
+        'limit': '1',
+      });
+
+      if (!playerData || playerData.length === 0) {
+        return { found: false, playerName };
+      }
+
       const rowsData = await supabaseQuery('game_player_rows', {
-        'or': `(raw_row_json->>0.eq.${name}),(raw_row_json->>15.eq.${name})`,
-        'select': 'game_id,raw_row_json',
+        'or': `(player_home.eq.${encodeURIComponent(playerName)}),(player_away.eq.${encodeURIComponent(playerName)})`,
+        'select': 'game_id,player_home,total_home,sp_home,mp_home,player_away,total_away,sp_away,mp_away',
         'order': 'game_id.desc',
-        'limit': '100',
+        'limit': '200',
       });
 
       if (!rowsData || rowsData.length === 0) {
-        return { found: false, playerName: name };
+        return { found: true, playerName, clubs: [], gamesPlayed: 0, wins: 0, losses: 0, draws: 0, averageScore: 0, ranking: null, history: [] };
       }
 
-      const uniqueGameIds: string[] = rowsData.map((r: Record<string, unknown>) => r.game_id as string);
-      const uniqueGameIdSet = Array.from(new Set(uniqueGameIds));
+      const uniqueGameIds = [...new Set(rowsData.map((r: Record<string, unknown>) => r.game_id as string))];
       
       const gamesData = await Promise.all(
-        uniqueGameIdSet.slice(0, 50).map((gameId) => 
+        uniqueGameIds.slice(0, 50).map((gameId) => 
           supabaseQuery('games', {
             'game_id': `eq.${gameId}`,
             'select': 'game_id,game_date,game_time,team_home,team_away,result,league_context,matchday_label',
@@ -124,17 +140,16 @@ function supabaseMirrorStore() {
       let totalHolz = 0;
       let countedRows = 0;
 
-      for (const row of rowsData as Array<{game_id: string; raw_row_json: unknown[]}>) {
-        const game = gamesMap.get(row.game_id);
+      for (const row of rowsData as Array<Record<string, unknown>>) {
+        const game = gamesMap.get(row.game_id as string);
         if (!game) continue;
 
-        const raw = row.raw_row_json;
-        const isHome = String(raw[0] ?? '') === name;
-        const playerTotal = String(isHome ? raw[5] ?? '' : raw[10] ?? '');
-        const playerSp = String(isHome ? raw[6] ?? '' : raw[9] ?? '');
-        const playerMp = String(isHome ? raw[7] ?? '' : raw[8] ?? '');
-        const teamName = String(isHome ? game.team_home : game.team_away);
-        const opponentClub = String(isHome ? game.team_away : game.team_home);
+        const isHome = row.player_home === playerName;
+        const playerTotal = isHome ? String(row.total_home ?? '') : String(row.total_away ?? '');
+        const playerSp = isHome ? String(row.sp_home ?? '') : String(row.sp_away ?? '');
+        const playerMp = isHome ? String(row.mp_home ?? '') : String(row.mp_away ?? '');
+        const teamName = isHome ? String(game.team_home) : String(game.team_away);
+        const opponentClub = isHome ? String(game.team_away) : String(game.team_home);
         const score = parseResultScore(game.result ? String(game.result) : null);
         const gameId = String(row.game_id);
         uniqueGames.add(gameId);
@@ -182,7 +197,7 @@ function supabaseMirrorStore() {
 
       return {
         found: true,
-        playerName: name,
+        playerName,
         clubs: Array.from(clubs).sort(),
         gamesPlayed: uniqueGames.size,
         wins,

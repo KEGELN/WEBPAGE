@@ -152,10 +152,20 @@ export default function TrainerDashboard() {
     const loadMirrorProfile = async () => {
       setMirrorLoading(true);
       try {
-        const res = await fetch(`/api/mirror/player?name=${encodeURIComponent(selectedPlayer.mirrorPlayerName || '')}`);
-        const payload = (await res.json()) as MirrorPlayerProfile;
-        if (!cancelled) {
-          setMirrorProfile(res.ok ? payload : payload.found ? payload : null);
+        const res = await fetch(`/api/mirror/search?q=${encodeURIComponent(selectedPlayer.mirrorPlayerName || '')}`);
+        const data = await res.json();
+        
+        if (data.players && data.players.length > 0) {
+          const playerId = data.players[0].id;
+          const playerRes = await fetch(`/api/mirror/player?id=${encodeURIComponent(playerId)}`);
+          const payload = (await playerRes.json()) as MirrorPlayerProfile;
+          if (!cancelled) {
+            setMirrorProfile(playerRes.ok ? payload : payload.found ? payload : null);
+          }
+        } else {
+          if (!cancelled) {
+            setMirrorProfile(null);
+          }
         }
       } catch (error) {
         console.error('Failed to load mirror player profile', error);

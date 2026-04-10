@@ -30,6 +30,11 @@ interface PlayerStats {
   history?: PlayerHistoryEntry[];
 }
 
+interface SearchResult {
+  players: Array<{ id: string; name: string; club: string; gameCount: number }>;
+  clubs: Array<{ name: string; gameCount: number }>;
+}
+
 export interface SchnittPlayerRow {
   rank?: number;
   id?: string;
@@ -70,12 +75,25 @@ class PlayerService {
   }
 
   async getPlayerStats(playerName: string): Promise<PlayerStats> {
-    const res = await fetch(`/api/mirror/player?name=${encodeURIComponent(playerName)}`);
-    const payload = (await res.json()) as PlayerStats;
-    if (!res.ok && res.status !== 404) {
-      throw new Error('Failed to fetch player profile');
+    try {
+      const searchRes = await fetch(`/api/mirror/search?q=${encodeURIComponent(playerName)}`);
+      const searchData = (await searchRes.json()) as SearchResult;
+      
+      if (searchData.players && searchData.players.length > 0) {
+        const playerId = searchData.players[0].id;
+        const res = await fetch(`/api/mirror/player?id=${encodeURIComponent(playerId)}`);
+        const payload = (await res.json()) as PlayerStats;
+        if (!res.ok && res.status !== 404) {
+          throw new Error('Failed to fetch player profile');
+        }
+        return payload;
+      }
+      
+      return { found: false, playerName, gamesPlayed: 0, wins: 0, losses: 0, averageScore: 0 };
+    } catch (error) {
+      console.error('Error fetching player stats:', error);
+      throw error;
     }
-    return payload;
   }
 }
 
