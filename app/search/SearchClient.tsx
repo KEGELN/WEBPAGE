@@ -49,7 +49,7 @@ export default function SearchClient() {
             description: `${club.gameCount} gespiegelte Spiele`
           })),
           ...payload.players.map(player => ({
-            id: player.name,
+            id: player.id,
             type: 'Player',
             name: player.name,
             description: `${player.club || 'Kein Verein'} · ${player.gameCount} Spiele`
@@ -135,7 +135,7 @@ export default function SearchClient() {
             {filteredResults.map((result) => (
               <Link
                 key={`${result.type}-${result.id}`}
-                href={result.type === 'Player' ? `/player?name=${encodeURIComponent(result.name)}` : `/club?name=${encodeURIComponent(result.name)}`}
+                href={result.type === 'Player' ? `/player?id=${encodeURIComponent(result.id)}` : `/club?name=${encodeURIComponent(result.name)}`}
                 className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20"
               >
                 <div className="flex justify-between items-start gap-4">
