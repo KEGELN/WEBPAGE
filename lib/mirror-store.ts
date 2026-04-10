@@ -110,20 +110,26 @@ function supabaseMirrorStore() {
       }
 
       const playerName = String(playerData[0].player_name);
-      const searchPattern = playerName.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
+      const normalizedSearch = playerName.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
 
       const rowsData = await supabaseQuery('game_player_rows', {
-        'or': `(player_home.like.*${searchPattern}*),(player_away.like.*${searchPattern}*)`,
+        'or': `(player_home.like.*${normalizedSearch}*),(player_away.like.*${normalizedSearch}*)`,
         'select': 'game_id,player_home,total_home,sp_home,mp_home,player_away,total_away,sp_away,mp_away',
         'order': 'game_id.desc',
         'limit': '200',
       });
 
-      if (!rowsData || rowsData.length === 0) {
+      const filteredRows = (rowsData || []).filter((r: Record<string, unknown>) => {
+        const home = String(r.player_home ?? '').toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
+        const away = String(r.player_away ?? '').toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
+        return home.includes(normalizedSearch) || away.includes(normalizedSearch);
+      });
+
+      if (filteredRows.length === 0) {
         return { found: true, playerName, clubs: [], gamesPlayed: 0, wins: 0, losses: 0, draws: 0, averageScore: 0, ranking: null, history: [] };
       }
 
-      const uniqueGameIds = [...new Set(rowsData.map((r: Record<string, unknown>) => r.game_id as string))];
+      const uniqueGameIds = [...new Set(filteredRows.map((r: Record<string, unknown>) => r.game_id as string))];
       
       const gamesData = await Promise.all(
         uniqueGameIds.slice(0, 50).map((gameId) => 
@@ -145,11 +151,15 @@ function supabaseMirrorStore() {
       let totalHolz = 0;
       let countedRows = 0;
 
-      for (const row of rowsData as Array<Record<string, unknown>>) {
+      for (const row of filteredRows as Array<Record<string, unknown>>) {
         const game = gamesMap.get(row.game_id as string);
         if (!game) continue;
 
-        const isHome = row.player_home === playerName;
+        const homeRaw = String(row.player_home ?? '');
+        const awayRaw = String(row.player_away ?? '');
+        const homeNormalized = homeRaw.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
+        const awayNormalized = awayRaw.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
+        const isHome = homeNormalized.includes(normalizedSearch);
         const playerTotal = isHome ? String(row.total_home ?? '') : String(row.total_away ?? '');
         const playerSp = isHome ? String(row.sp_home ?? '') : String(row.sp_away ?? '');
         const playerMp = isHome ? String(row.mp_home ?? '') : String(row.mp_away ?? '');
