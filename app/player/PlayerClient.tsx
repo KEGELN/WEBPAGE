@@ -154,7 +154,8 @@ export default function PlayerClient() {
       return;
     }
     if (!query.trim()) return;
-    router.push(`/player?name=${encodeURIComponent(query.trim())}`);
+    const encoded = Buffer.from(query.trim()).toString('base64url');
+    router.push(`/player?id=${encoded}`);
   };
 
   const selectPlayerResult = (result: PlayerSearchMatch) => {

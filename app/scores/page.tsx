@@ -308,9 +308,19 @@ export default function ScoresPage() {
     ? sortedPlayers.filter(player => (player.category || 'Männer') === selectedCategory)
     : sortedPlayers;
 
-  const handlePlayerClick = (playerName: string) => {
+  const handlePlayerClick = async (playerName: string) => {
     if (!playerName) return;
-    router.push(`/player?name=${encodeURIComponent(playerName)}`);
+    try {
+      const res = await fetch(`/api/mirror/search?q=${encodeURIComponent(playerName)}`);
+      const data = await res.json();
+      if (data.players && data.players.length > 0) {
+        router.push(`/player?id=${encodeURIComponent(data.players[0].id)}`);
+      } else {
+        router.push(`/player?name=${encodeURIComponent(playerName)}`);
+      }
+    } catch {
+      router.push(`/player?name=${encodeURIComponent(playerName)}`);
+    }
   };
 
   const handleSort = (key: string) => {
