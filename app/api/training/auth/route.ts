@@ -25,19 +25,20 @@ async function parseBody(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let body: Record<string, string | undefined> = {};
+  
   try {
-    const body = await parseBody(request);
-    const { action, email, playerId, username, tempPassword, supabaseUserId, name } = body as {
-      action?: string;
-      email?: string;
-      playerId?: string;
-      username?: string;
-      tempPassword?: string;
-      supabaseUserId?: string;
-      name?: string;
-    };
-    
-    console.log('Training auth action:', action, 'email:', email);
+    body = await parseBody(request);
+  } catch (parseError) {
+    console.error('Failed to parse body:', parseError);
+    return NextResponse.json({ error: 'Failed to parse request body', details: String(parseError) }, { status: 400 });
+  }
+  
+  const { action, email, playerId, username, tempPassword, supabaseUserId, name } = body;
+  
+  console.log('Training auth request:', { action, email, supabaseUserId, name });
+  
+  try {
 
     if (action === 'create-trainer') {
       if (!email || !supabaseUserId) {

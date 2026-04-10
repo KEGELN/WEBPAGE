@@ -72,7 +72,9 @@ function localTrainingStore(): TrainingStore {
     saveTrainerMessage: async (message) => serverDb.saveTrainerMessage(message),
     saveTrainer: async (trainer) => serverDb.saveTrainer(trainer),
     saveTrainerWithSupabaseId: async (trainer, supabaseUserId) => {
+      console.log('localTrainingStore.saveTrainerWithSupabaseId called', trainer, supabaseUserId);
       const saved = await serverDb.saveTrainer(trainer);
+      console.log('localTrainingStore.saveTrainer result:', saved);
       return saved;
     },
     findTrainerBySupabaseId: async (supabaseUserId, email) => {
