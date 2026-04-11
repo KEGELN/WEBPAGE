@@ -87,7 +87,7 @@ export default function Menubar() {
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <Image src={logo} alt="Logo" width={48} height={48} priority />
-                    <span>Kegel</span>
+                    <span>Kegel Web</span>
                   </Link>
                   
                   {/* Desktop Navigation Links */}
@@ -106,9 +106,6 @@ export default function Menubar() {
             </Link>
             <Link href="/live" className="hover:text-primary transition-colors duration-200 font-medium">
               Live
-            </Link>
-            <Link href="/berlin" className="hover:text-primary transition-colors duration-200 font-medium">
-              Berlin
             </Link>
             <div className="relative">
               <button
@@ -298,13 +295,6 @@ export default function Menubar() {
                 className="block px-4 py-2 hover:bg-muted rounded-md transition-colors font-medium"
               >
                 Live
-              </Link>
-              <Link
-                href="/berlin"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="block px-4 py-2 hover:bg-muted rounded-md transition-colors font-medium"
-              >
-                Berlin
               </Link>
               <div className="rounded-md border border-border/60">
                 <button

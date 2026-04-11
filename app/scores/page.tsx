@@ -7,6 +7,9 @@ import PlayerService from '@/lib/player-service';
 import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { readDefaultLeagueId } from '@/lib/client-settings';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select } from "@/components/ui/select";
 
 type PlayerRow = {
   id?: string;
@@ -68,7 +71,6 @@ export default function ScoresPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [standings, setStandings] = useState<StandingRow[]>([]);
-  const [standingsLoading, setStandingsLoading] = useState(false);
   const [standingsSort, setStandingsSort] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   const playerService = useMemo(() => new PlayerService(), []);
@@ -155,6 +157,8 @@ export default function ScoresPage() {
     if (players && players.length > 0) {
       const uniqueCategories = Array.from(new Set(players.map(player => player.category || 'Männer'))).sort();
       setCategories(uniqueCategories);
+    } else {
+      setCategories([]);
     }
   }, [players]);
 
@@ -177,7 +181,6 @@ export default function ScoresPage() {
 
   const handleSeasonChange = (nextSeason: string) => {
     if (nextSeason === selectedSeason) return;
-    // Force a fresh data chain for the new season.
     setSelectedSeason(nextSeason);
     setSelectedLeague('');
     setSpieltage([]);
@@ -212,7 +215,6 @@ export default function ScoresPage() {
   useEffect(() => {
     const fetchStandings = async () => {
       if (!selectedSeason || !selectedLeague || !selectedSpieltag) return;
-      setStandingsLoading(true);
       try {
         const spieltagNr = Number(selectedSpieltag);
         const data = await apiService.getStandingsRaw(selectedLeague, selectedSeason, spieltagNr, 0);
@@ -225,8 +227,6 @@ export default function ScoresPage() {
       } catch (err) {
         console.error('Error fetching standings:', err);
         setStandings([]);
-      } finally {
-        setStandingsLoading(false);
       }
     };
 
@@ -262,30 +262,6 @@ export default function ScoresPage() {
       case 'points':
         aValue = parseInt(asString(a.mpTotal || a.points || 0), 10);
         bValue = parseInt(asString(b.mpTotal || b.points || 0), 10);
-        break;
-      case 'homeGames':
-        aValue = parseInt(asString(a.gamesHome || a.homeGames || 0), 10);
-        bValue = parseInt(asString(b.gamesHome || b.homeGames || 0), 10);
-        break;
-      case 'homeAverage':
-        aValue = parseFloat((a.avgHome || a.homeAverage || '0').replace(',', '.'));
-        bValue = parseFloat((b.avgHome || b.homeAverage || '0').replace(',', '.'));
-        break;
-      case 'homePoints':
-        aValue = parseInt(asString(a.mpHome || a.homePoints || 0), 10);
-        bValue = parseInt(asString(b.mpHome || b.homePoints || 0), 10);
-        break;
-      case 'awayGames':
-        aValue = parseInt(asString(a.gamesAway || a.awayGames || 0), 10);
-        bValue = parseInt(asString(b.gamesAway || b.awayGames || 0), 10);
-        break;
-      case 'awayAverage':
-        aValue = parseFloat((a.avgAway || a.awayAverage || '0').replace(',', '.'));
-        bValue = parseFloat((b.avgAway || b.awayAverage || '0').replace(',', '.'));
-        break;
-      case 'awayPoints':
-        aValue = parseInt(asString(a.mpAway || a.awayPoints || 0), 10);
-        bValue = parseInt(asString(b.mpAway || b.awayPoints || 0), 10);
         break;
       case 'best':
         aValue = parseInt(asString(a.bestGame || a.best || 0), 10);
@@ -341,15 +317,15 @@ export default function ScoresPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground">
       <Menubar />
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8 rounded-2xl border border-border bg-gradient-to-br from-red-500/15 via-background to-rose-500/10 p-6 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <main className="container mx-auto px-4 py-8 space-y-8">
+        <Card className="bg-gradient-to-br from-red-500/15 via-background to-rose-500/10 border-none shadow-md overflow-hidden">
+          <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between pb-2">
             <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Schnittliste</div>
-              <h1 className="text-3xl font-bold text-foreground">Scores</h1>
-              <p className="text-sm text-muted-foreground">Durchschnittswerte und Matchpunkte der Spieler.</p>
+              <CardDescription className="uppercase tracking-wide">Schnittliste</CardDescription>
+              <CardTitle className="text-3xl font-bold">Scores</CardTitle>
+              <CardDescription>Durchschnittswerte und Matchpunkte der Spieler.</CardDescription>
             </div>
             <div className="flex flex-wrap gap-3">
               <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
@@ -361,91 +337,81 @@ export default function ScoresPage() {
                 <div className="text-base font-semibold text-foreground">{formatNumber(categories.length)}</div>
               </div>
             </div>
-          </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-4 items-end mt-4">
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="seasonFilter" className="text-sm font-medium">Saison</label>
+                <Select
+                  id="seasonFilter"
+                  value={selectedSeason}
+                  onChange={(e) => handleSeasonChange(e.target.value)}
+                  className="w-[180px]"
+                >
+                  <option value="">Alle Saisons</option>
+                  {seasons.map((season) => (
+                    <option key={season.season_id} value={season.season_id}>
+                      {season.yearof_season}
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-          <div className="mt-5 flex flex-wrap gap-4 items-end">
-            <div className="flex flex-col">
-              <label htmlFor="seasonFilter" className="text-sm font-medium text-foreground mb-1">
-                Saison
-              </label>
-              <select
-                id="seasonFilter"
-                value={selectedSeason}
-                onChange={(e) => handleSeasonChange(e.target.value)}
-                className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Alle Saisons</option>
-                {seasons.map((season) => (
-                  <option key={season.season_id} value={season.season_id}>
-                    {season.yearof_season} (ID: {season.season_id})
-                  </option>
-                ))}
-              </select>
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="leagueFilter" className="text-sm font-medium">Liga</label>
+                <Select
+                  id="leagueFilter"
+                  value={selectedLeague}
+                  onChange={(e) => setSelectedLeague(e.target.value)}
+                  className="w-[220px]"
+                >
+                  <option value="">Alle Ligen</option>
+                  {leagues.map((league) => (
+                    <option key={league.liga_id} value={league.liga_id}>
+                      {league.name_der_liga}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="categoryFilter" className="text-sm font-medium">Kategorie</label>
+                <Select
+                  id="categoryFilter"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-[180px]"
+                >
+                  <option value="">Alle Kategorien</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="spieltagFilter" className="text-sm font-medium">Spieltag</label>
+                <Select
+                  id="spieltagFilter"
+                  value={selectedSpieltag}
+                  onChange={(e) => setSelectedSpieltag(e.target.value)}
+                  className="w-[180px]"
+                >
+                  <option value="100">Aktuell (100)</option>
+                  {spieltage.map((spieltag) => (
+                    <option key={spieltag.id} value={spieltag.nr}>
+                      {spieltag.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <div className="flex flex-col">
-              <label htmlFor="leagueFilter" className="text-sm font-medium text-foreground mb-1">
-                Liga
-              </label>
-              <select
-                id="leagueFilter"
-                value={selectedLeague}
-                onChange={(e) => setSelectedLeague(e.target.value)}
-                className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Alle Ligen</option>
-                {leagues.map((league) => (
-                  <option key={league.liga_id} value={league.liga_id}>
-                    {league.name_der_liga}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col">
-              <label htmlFor="categoryFilter" className="text-sm font-medium text-foreground mb-1">
-                Kategorie
-              </label>
-              <select
-                id="categoryFilter"
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Alle Kategorien</option>
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col">
-              <label htmlFor="spieltagFilter" className="text-sm font-medium text-foreground mb-1">
-                Spieltag
-              </label>
-              <select
-                id="spieltagFilter"
-                value={selectedSpieltag}
-                onChange={(e) => setSelectedSpieltag(e.target.value)}
-                className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="100">Aktuell (100)</option>
-                {spieltage.length === 0 && <option value="">Keine Spieltage</option>}
-                {spieltage.map((spieltag) => (
-                  <option key={spieltag.id} value={spieltag.nr}>
-                    {spieltag.label}{spieltag.status === '1' ? ' (Aktuell)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {loading && (
-          <LoadingSpinner label="Lade Scores..." />
-        )}
+        {loading && <LoadingSpinner label="Lade Scores..." />}
 
         {error && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-destructive">
@@ -453,208 +419,114 @@ export default function ScoresPage() {
           </div>
         )}
 
-        {!error && (
-          <>
-            <div className="mb-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-foreground">Tabelle</h2>
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Spieltag {selectedSpieltag === '100' ? 'Aktuell' : selectedSpieltag}
-                </span>
-              </div>
+        {!loading && !error && (
+          <div className="space-y-8">
+            {standings.length > 0 && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <h2 className="text-xl font-semibold">Tabelle</h2>
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Spieltag {selectedSpieltag === '100' ? 'Aktuell' : selectedSpieltag}
+                  </span>
+                </div>
+                
+                <Card className="border border-border bg-gradient-to-br from-red-500/5 via-background to-rose-500/5 shadow-sm overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead onClick={() => handleStandingsSort('position')} className="cursor-pointer hover:bg-accent/50 w-12 text-center">Pl.</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('team')} className="cursor-pointer hover:bg-accent/50 min-w-[16rem]">Mannschaft</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('spTotal')} className="cursor-pointer hover:bg-accent/50 text-center">Sp.</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('tpTotal')} className="cursor-pointer hover:bg-accent/50 text-center">TP</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('mpTotal')} className="cursor-pointer hover:bg-accent/50 text-center">MP</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('spHome')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">Sp.(H)</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('tpHome')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">TP(H)</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('mpHome')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">MP(H)</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('spAway')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">Sp.(A)</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('tpAway')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">TP(A)</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('mpAway')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">MP(A)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {standings.map((row, idx) => (
+                        <TableRow key={`${row[0]}-${idx}`}>
+                          <TableCell className="text-center font-medium">{displayValue(row[1])}</TableCell>
+                          <TableCell className="font-semibold">
+                            <button
+                              type="button"
+                              onClick={() => handleTeamScheduleClick(String(row[2] || ''))}
+                              className="text-left hover:text-primary transition-colors underline decoration-dotted underline-offset-4"
+                            >
+                              {displayValue(row[2])}
+                            </button>
+                          </TableCell>
+                          <TableCell className="text-center">{displayValue(row[4])}</TableCell>
+                          <TableCell className="text-center font-mono">{`${row[7]}-${row[10]}`}</TableCell>
+                          <TableCell className="text-center font-bold">{displayValue(row[13])}</TableCell>
+                          <TableCell className="text-center hidden md:table-cell">{displayValue(row[5])}</TableCell>
+                          <TableCell className="text-center hidden md:table-cell font-mono">{`${row[8]}-${row[11]}`}</TableCell>
+                          <TableCell className="text-center hidden md:table-cell">{displayValue(row[14])}</TableCell>
+                          <TableCell className="text-center hidden md:table-cell">{displayValue(row[6])}</TableCell>
+                          <TableCell className="text-center hidden md:table-cell font-mono">{`${row[9]}-${row[12]}`}</TableCell>
+                          <TableCell className="text-center hidden md:table-cell">{displayValue(row[15])}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Card>
+              </section>
+            )}
 
-              {standingsLoading && <LoadingSpinner label="Lade Tabelle..." className="py-6" size="sm" />}
-
-              {!standingsLoading && standings.length > 0 && (
-                (() => {
-                  const sortedStandings = [...standings].sort((a, b) => {
-                    if (!standingsSort) return 0;
-                    const getValue = (row: StandingRow) => {
-                      switch (standingsSort.key) {
-                        case 'position':
-                          return Number(row[1] || 0);
-                        case 'team':
-                          return String(row[2] || '');
-                        case 'spTotal':
-                          return Number(row[4] || 0);
-                        case 'tpTotal':
-                          return Number(row[7] || 0) - Number(row[10] || 0);
-                        case 'mpTotal':
-                          return Number(row[13] || 0);
-                        case 'spHome':
-                          return Number(row[5] || 0);
-                        case 'tpHome':
-                          return Number(row[8] || 0) - Number(row[11] || 0);
-                        case 'mpHome':
-                          return Number(row[14] || 0);
-                        case 'spAway':
-                          return Number(row[6] || 0);
-                        case 'tpAway':
-                          return Number(row[9] || 0) - Number(row[12] || 0);
-                        case 'mpAway':
-                          return Number(row[15] || 0);
-                        default:
-                          return 0;
-                      }
-                    };
-                    const aVal = getValue(a);
-                    const bVal = getValue(b);
-                    if (typeof aVal === 'string' && typeof bVal === 'string') {
-                      return standingsSort.direction === 'asc'
-                        ? aVal.localeCompare(bVal)
-                        : bVal.localeCompare(aVal);
-                    }
-                    if (aVal < bVal) return standingsSort.direction === 'asc' ? -1 : 1;
-                    if (aVal > bVal) return standingsSort.direction === 'asc' ? 1 : -1;
-                    return 0;
-                  });
-
-                  return (
-                    <div className="mt-3 overflow-x-auto rounded-2xl border border-border bg-gradient-to-br from-red-500/10 via-background to-rose-500/5 shadow-sm">
-                      <table className="min-w-full bg-card/80 rounded-2xl overflow-hidden border border-border">
-                        <thead className="bg-muted/70">
-                          <tr>
-                            <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('position')}>Pl.</th>
-                            <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent/50 min-w-[16rem]" onClick={() => handleStandingsSort('team')}>Mannschaft</th>
-                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('spTotal')}>Sp.</th>
-                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('tpTotal')}>TP</th>
-                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('mpTotal')}>MP</th>
-                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('spHome')}>Sp. (Heim)</th>
-                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('tpHome')}>TP (Heim)</th>
-                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('mpHome')}>MP (Heim)</th>
-                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('spAway')}>Sp. (Ausw)</th>
-                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('tpAway')}>TP (Ausw)</th>
-                            <th className="py-3 px-4 text-center text-foreground cursor-pointer hover:bg-accent/50" onClick={() => handleStandingsSort('mpAway')}>MP (Ausw)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sortedStandings.map((row, idx) => {
-                            const pos = row[1];
-                            const team = row[2];
-                            const spTotal = row[4];
-                            const spHome = row[5];
-                            const spAway = row[6];
-                            const tpTotal = `${row[7]}-${row[10]}`;
-                            const tpHome = `${row[8]}-${row[11]}`;
-                            const tpAway = `${row[9]}-${row[12]}`;
-                            const mpTotal = row[13];
-                            const mpHome = row[14];
-                            const mpAway = row[15];
-
-                            return (
-                              <tr key={`${row[0]}-${idx}`} className="border-b border-border">
-                                <td className="py-3 px-4">{displayValue(pos)}</td>
-                                <td className="py-3 px-4 font-medium text-foreground min-w-[16rem] whitespace-nowrap">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleTeamScheduleClick(String(team || ''))}
-                                    className="text-left underline decoration-dotted underline-offset-4 hover:text-primary"
-                                  >
-                                    {displayValue(team)}
-                                  </button>
-                                </td>
-                                <td className="py-3 px-4 text-center">{displayValue(spTotal)}</td>
-                            <td className="py-3 px-4 text-center whitespace-nowrap">{displayValue(tpTotal)}</td>
-                                <td className="py-3 px-4 text-center">{displayValue(mpTotal)}</td>
-                                <td className="py-3 px-4 text-center">{displayValue(spHome)}</td>
-                            <td className="py-3 px-4 text-center whitespace-nowrap">{displayValue(tpHome)}</td>
-                                <td className="py-3 px-4 text-center">{displayValue(mpHome)}</td>
-                                <td className="py-3 px-4 text-center">{displayValue(spAway)}</td>
-                            <td className="py-3 px-4 text-center whitespace-nowrap">{displayValue(tpAway)}</td>
-                                <td className="py-3 px-4 text-center">{displayValue(mpAway)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })()
-              )}
-            </div>
-          </>
-        )}
-
-        {!loading && !error && filteredPlayers.length > 0 && (
-          <div className="overflow-x-auto rounded-2xl border border-border bg-gradient-to-br from-red-500/10 via-background to-rose-500/5 shadow-sm">
-            <table className="min-w-full bg-card/80 rounded-2xl overflow-hidden border border-border">
-              <thead className="bg-muted/70 sticky top-0">
-                <tr>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors" onClick={() => handleSort('rank')}>
-                    Pl.
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors" onClick={() => handleSort('name')}>
-                    Spieler
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors" onClick={() => handleSort('category')}>
-                    Kategorie
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors" onClick={() => handleSort('club')}>
-                    Klub
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors" onClick={() => handleSort('totalGames')}>
-                    Sp.
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors" onClick={() => handleSort('average')}>
-                    ∅
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors" onClick={() => handleSort('points')}>
-                    MP
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors hidden md:table-cell" onClick={() => handleSort('homeGames')}>
-                    Sp. (Heim)
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors hidden md:table-cell" onClick={() => handleSort('homeAverage')}>
-                    ∅ (Heim)
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors hidden md:table-cell" onClick={() => handleSort('homePoints')}>
-                    MP (Heim)
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors hidden md:table-cell" onClick={() => handleSort('awayGames')}>
-                    Sp. (Ausw)
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors hidden md:table-cell" onClick={() => handleSort('awayAverage')}>
-                    ∅ (Ausw)
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors hidden md:table-cell" onClick={() => handleSort('awayPoints')}>
-                    MP (Ausw)
-                  </th>
-                  <th className="py-3 px-4 text-left text-foreground cursor-pointer hover:bg-accent transition-colors hidden md:table-cell" onClick={() => handleSort('best')}>
-                    Best
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPlayers.map((player, index) => (
-                  <tr
-                    key={player.id ?? index}
-                    className="border-b border-border hover:bg-accent/50 transition-colors cursor-pointer"
-                    onClick={() => handlePlayerClick(player.name || '')}
-                  >
-                    <td className="py-3 px-4">{displayValue(player.rank)}</td>
-                    <td className="py-3 px-4 font-medium text-foreground">{displayValue(player.name)}</td>
-                    <td className="py-3 px-4">{displayValue(player.category)}</td>
-                    <td className="py-3 px-4">{displayValue(player.club)}</td>
-                    <td className="py-3 px-4">{formatNumber(player.gamesTotal)}</td>
-                    <td className="py-3 px-4">{displayValue(player.avgTotal)}</td>
-                    <td className="py-3 px-4">{formatNumber(player.mpTotal)}</td>
-                    <td className="py-3 px-4 hidden md:table-cell">{formatNumber(player.gamesHome)}</td>
-                    <td className="py-3 px-4 hidden md:table-cell">{displayValue(player.avgHome)}</td>
-                    <td className="py-3 px-4 hidden md:table-cell">{formatNumber(player.mpHome)}</td>
-                    <td className="py-3 px-4 hidden md:table-cell">{formatNumber(player.gamesAway)}</td>
-                    <td className="py-3 px-4 hidden md:table-cell">{displayValue(player.avgAway)}</td>
-                    <td className="py-3 px-4 hidden md:table-cell">{formatNumber(player.mpAway)}</td>
-                    <td className="py-3 px-4 hidden md:table-cell">{formatNumber(player.bestGame)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {filteredPlayers.length > 0 && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <h2 className="text-xl font-semibold">Einzelwertung</h2>
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                    {filteredPlayers.length} Spieler
+                  </span>
+                </div>
+                <Card className="border border-border bg-gradient-to-br from-red-500/5 via-background to-rose-500/5 shadow-sm overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead onClick={() => handleSort('rank')} className="cursor-pointer hover:bg-accent/50 w-12 text-center">Pl.</TableHead>
+                        <TableHead onClick={() => handleSort('name')} className="cursor-pointer hover:bg-accent/50 min-w-[14rem]">Spieler</TableHead>
+                        <TableHead onClick={() => handleSort('category')} className="cursor-pointer hover:bg-accent/50 hidden lg:table-cell">Kat.</TableHead>
+                        <TableHead onClick={() => handleSort('club')} className="cursor-pointer hover:bg-accent/50">Klub</TableHead>
+                        <TableHead onClick={() => handleSort('totalGames')} className="cursor-pointer hover:bg-accent/50 text-center">Sp.</TableHead>
+                        <TableHead onClick={() => handleSort('average')} className="cursor-pointer hover:bg-accent/50 text-center">∅</TableHead>
+                        <TableHead onClick={() => handleSort('points')} className="cursor-pointer hover:bg-accent/50 text-center">MP</TableHead>
+                        <TableHead onClick={() => handleSort('best')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">Best</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredPlayers.map((player, index) => (
+                        <TableRow 
+                          key={player.id ?? index} 
+                          className="cursor-pointer"
+                          onClick={() => handlePlayerClick(player.name || '')}
+                        >
+                          <TableCell className="text-center font-medium">{displayValue(player.rank)}</TableCell>
+                          <TableCell className="font-semibold">{displayValue(player.name)}</TableCell>
+                          <TableCell className="hidden lg:table-cell text-muted-foreground">{displayValue(player.category)}</TableCell>
+                          <TableCell className="text-sm">{displayValue(player.club)}</TableCell>
+                          <TableCell className="text-center">{formatNumber(player.gamesTotal)}</TableCell>
+                          <TableCell className="text-center font-bold text-primary">{displayValue(player.avgTotal)}</TableCell>
+                          <TableCell className="text-center font-bold">{formatNumber(player.mpTotal)}</TableCell>
+                          <TableCell className="text-center hidden md:table-cell">{formatNumber(player.bestGame)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Card>
+              </section>
+            )}
           </div>
         )}
 
-        {!loading && !error && filteredPlayers.length === 0 && (
+        {!loading && !error && filteredPlayers.length === 0 && standings.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-lg text-muted-foreground">Keine Scores gefunden</p>
+            <p className="text-lg text-muted-foreground">Keine Daten gefunden</p>
           </div>
         )}
       </main>

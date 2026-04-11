@@ -19,7 +19,26 @@ export async function GET(request: NextRequest) {
   try {
     const store = getMirrorStore();
     const results = await store.search(q);
-    console.log('Search results:', JSON.stringify(results).slice(0, 200));
+    
+    // Supplement with local search
+    try {
+      const apiHandler = (await import('@/server')).apiHandler;
+      const localClubs = await apiHandler.searchClubs(q);
+      const existingClubNames = new Set(results.clubs.map(c => c.name.toLowerCase()));
+      
+      for (const club of localClubs) {
+        if (!existingClubNames.has(club.name_klub.toLowerCase())) {
+          results.clubs.push({
+            name: club.name_klub,
+            gameCount: 0, // We don't have game count for local clubs yet without a heavy query
+            lastGameDate: ''
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Could not supplement search with local clubs:", e);
+    }
+
     return NextResponse.json(results);
   } catch (error) {
     console.error('Mirror search failed:', error);

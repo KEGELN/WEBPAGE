@@ -1,7 +1,9 @@
-import type { Player, Trainer, TrainerMessage, TrainingSession, Club, ClubMember, ClubChatMessage, ClubAttendancePoll } from '@/lib/db';
+import type { Player, Trainer, TrainerMessage, TrainingSession } from '@/lib/db';
 import { getTrainingPool, hasTrainingDatabase } from '@/lib/postgres';
 import { serverDb } from '@/lib/server-db';
 import { getSupabaseServiceRoleClient } from '@/lib/supabase';
+
+type DbRow = Record<string, string | number | boolean | null | object>;
 
 type TrainingStore = {
   getPlayers(): Promise<Player[]>;
@@ -23,7 +25,7 @@ function createId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function mapPlayer(row: Record<string, any>): Player {
+function mapPlayer(row: DbRow): Player {
   return {
     id: String(row.id),
     name: String(row.name),
@@ -36,7 +38,7 @@ function mapPlayer(row: Record<string, any>): Player {
   };
 }
 
-function mapSession(row: Record<string, any>): TrainingSession {
+function mapSession(row: DbRow): TrainingSession {
   return {
     id: String(row.id),
     playerId: String(row.player_id),
@@ -51,7 +53,7 @@ function mapSession(row: Record<string, any>): TrainingSession {
   };
 }
 
-function mapMessage(row: Record<string, any>): TrainerMessage {
+function mapMessage(row: DbRow): TrainerMessage {
   return {
     id: String(row.id),
     playerId: String(row.player_id),

@@ -10,6 +10,10 @@ import {
 type MirrorSearch = ReturnType<typeof searchLocalMirror>;
 
 function decodePlayerKey(key: string): string {
+  // If the key is hex encoded (from python script) or base64url encoded
+  if (/^[0-9a-f]+$/i.test(key)) {
+    return Buffer.from(key, 'hex').toString('utf-8');
+  }
   return Buffer.from(key, 'base64url').toString('utf-8');
 }
 
@@ -82,7 +86,7 @@ function supabaseMirrorStore() {
 
       return {
         players: (playersData || []).map((row: Record<string, unknown>) => ({
-          id: Buffer.from(String(row.player_key || '')).toString('base64url'),
+          id: String(row.player_key || ''),
           rawId: String(row.player_key || ''),
           name: String(row.player_name || ''),
           club: String(row.club_name ?? ''),
@@ -97,7 +101,12 @@ function supabaseMirrorStore() {
       };
     },
     playerProfile: async (playerKey: string): Promise<MirrorPlayerProfile> => {
-      const decodedKey = Buffer.from(playerKey, 'base64url').toString('utf-8');
+      let decodedKey = '';
+      if (/^[0-9a-f]+$/i.test(playerKey)) {
+        decodedKey = Buffer.from(playerKey, 'hex').toString('utf-8');
+      } else {
+        decodedKey = Buffer.from(playerKey, 'base64url').toString('utf-8');
+      }
       
       const playerData = await supabaseQuery('player_search_index', {
         'player_key': `eq.${decodedKey}`,
@@ -116,7 +125,7 @@ function supabaseMirrorStore() {
         'or': `(player_home.like.*${firstName}*),(player_away.like.*${firstName}*)`,
         'select': 'game_id,player_home,total_home,sp_home,mp_home,player_away,total_away,sp_away,mp_away',
         'order': 'game_id.desc',
-        'limit': '200',
+        'limit': '500',
       });
 
       const filteredRows = (rowsData || []).filter((r: Record<string, unknown>) => {
@@ -132,7 +141,7 @@ function supabaseMirrorStore() {
       const uniqueGameIds = [...new Set(filteredRows.map((r: Record<string, unknown>) => r.game_id as string))];
       
       const gamesData = await Promise.all(
-        uniqueGameIds.slice(0, 50).map((gameId) => 
+        uniqueGameIds.slice(0, 100).map((gameId) => 
           supabaseQuery('games', {
             'game_id': `eq.${gameId}`,
             'select': 'game_id,game_date,game_time,team_home,team_away,result,league_context,matchday_label',
@@ -178,7 +187,7 @@ function supabaseMirrorStore() {
             scoreAgainst: isHome ? score.away : score.home,
           });
         }
-        if (history.length < 12) {
+        if (history.length < 50) {
           const scoreFor = score ? (isHome ? score.home : score.away) : null;
           const scoreAgainst = score ? (isHome ? score.away : score.home) : null;
           history.push({

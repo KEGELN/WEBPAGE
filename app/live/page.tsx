@@ -143,6 +143,12 @@ async function fetchLeagueGames(seasonId: string, seasonLabel: string, league: L
     .filter((game) => game.gameId && game.homeTeam && game.awayTeam);
 }
 
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+
+// ... rest of imports
+
 export default function LivePage() {
   const apiService = ApiService.getInstance();
   const { expertMode } = useTheme();
@@ -205,19 +211,22 @@ export default function LivePage() {
   }, [apiService]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground">
       <Menubar />
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-6 rounded-2xl border border-border bg-gradient-to-br from-red-500/15 via-background to-rose-500/10 p-6 shadow-sm">
-          <h1 className="text-3xl font-bold text-foreground">Live Scores</h1>
-          <p className="text-sm text-muted-foreground">
-            Laufende Spiele der aktuellen Saison (nur GetSpiel-Daten).
-          </p>
-          <div className="mt-3 text-xs text-muted-foreground">
-            Letztes Update:{' '}
-            {lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '-'}
-          </div>
-        </div>
+      <main className="container mx-auto px-4 py-8 space-y-8">
+        <Card className="bg-gradient-to-br from-red-500/15 via-background to-rose-500/10 border-none shadow-md overflow-hidden">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-3xl font-bold">Live Scores</CardTitle>
+                <CardDescription>Laufende Spiele der aktuellen Saison.</CardDescription>
+              </div>
+              <div className="text-xs text-muted-foreground bg-card/50 px-3 py-1.5 rounded-full border border-border">
+                Update: {lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '-'}
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
 
         {loading && <LoadingSpinner label="Lade Live-Spiele..." />}
 
@@ -226,107 +235,110 @@ export default function LivePage() {
         )}
 
         {!loading && !error && allLiveGames.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-6 text-muted-foreground">
-            Aktuell sind keine laufenden Spiele gefunden.
-          </div>
+          <Card className="border-dashed bg-muted/20">
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <p className="text-muted-foreground">Aktuell sind keine laufenden Spiele gefunden.</p>
+              <p className="text-xs mt-2 text-muted-foreground/60 italic">Automatischer Refresh alle 5 Minuten.</p>
+            </CardContent>
+          </Card>
         )}
 
         {!loading && !error && allLiveGames.length > 0 && (
-          <section className="rounded-2xl border border-border bg-card shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className="bg-muted/70">
-                  <tr>
-                    <th className="px-4 py-3 text-left">Zeit</th>
-                    <th className="px-4 py-3 text-left">Liga</th>
-                    <th className="px-4 py-3 text-left">Heim</th>
-                    <th className="px-4 py-3 text-left">Gast</th>
-                    <th className="px-4 py-3 text-left">Ergebnis</th>
-                    <th className="px-4 py-3 text-left">Führung</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allLiveGames.map((game) => (
-                    <tr
-                      key={`${game.seasonId}-${game.gameId}`}
-                      className="cursor-pointer border-t border-border hover:bg-accent/40"
-                      onClick={() => setSelectedGame(game)}
-                    >
-                      <td className="px-4 py-3 whitespace-nowrap">{game.dateTimeLabel || '-'}</td>
-                      <td className="px-4 py-3">{game.leagueName}</td>
-                      <td className="px-4 py-3">{game.homeTeam}</td>
-                      <td className="px-4 py-3">{game.awayTeam}</td>
-                      <td className="px-4 py-3 font-semibold">{game.resultText}</td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{getLeadText(game)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <Card className="border border-border bg-gradient-to-br from-red-500/5 via-background to-rose-500/5 shadow-sm overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Zeit</TableHead>
+                  <TableHead>Liga</TableHead>
+                  <TableHead>Heim</TableHead>
+                  <TableHead>Gast</TableHead>
+                  <TableHead className="text-center">Ergebnis</TableHead>
+                  <TableHead className="hidden lg:table-cell">Führung</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allLiveGames.map((game) => (
+                  <TableRow
+                    key={`${game.seasonId}-${game.gameId}`}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedGame(game)}
+                  >
+                    <TableCell className="whitespace-nowrap font-medium">{game.dateTimeLabel || '-'}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{game.leagueName}</TableCell>
+                    <TableCell className="font-semibold">{game.homeTeam}</TableCell>
+                    <TableCell className="font-semibold">{game.awayTeam}</TableCell>
+                    <TableCell className="text-center font-bold text-primary">{game.resultText}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground italic">{getLeadText(game)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
         )}
 
         {selectedGame && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl border border-border bg-background p-6 shadow-2xl">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <h2 className="text-2xl font-bold">Spiel-Details (GetSpiel)</h2>
-                <button
-                  type="button"
-                  onClick={() => setSelectedGame(null)}
-                  className="rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"
-                >
-                  Schließen
-                </button>
-              </div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <Card className="w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl border-none">
+              <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/30">
+                <div>
+                  <CardTitle>Spiel-Details</CardTitle>
+                  <CardDescription>{selectedGame.leagueName}</CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedGame(null)}>Schließen</Button>
+              </CardHeader>
+              <CardContent className="p-6 overflow-auto">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Heim</div>
+                    <div className="text-lg font-bold">{selectedGame.homeTeam}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Gast</div>
+                    <div className="text-lg font-bold">{selectedGame.awayTeam}</div>
+                  </div>
+                  
+                  <div className="md:col-span-2 py-4 border-y border-border/50">
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Aktueller Score</div>
+                      <div className="text-4xl font-black text-primary tabular-nums">{selectedGame.resultText}</div>
+                      <div className="text-sm font-medium italic text-muted-foreground">{getLeadText(selectedGame)}</div>
+                    </div>
+                  </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-lg border border-border p-3">
-                  <div className="text-xs text-muted-foreground">Saison</div>
-                  <div className="font-semibold">{selectedGame.seasonLabel}</div>
-                </div>
-                <div className="rounded-lg border border-border p-3">
-                  <div className="text-xs text-muted-foreground">Liga</div>
-                  <div className="font-semibold">{selectedGame.leagueName}</div>
-                </div>
-                {expertMode && (
-                  <div className="rounded-lg border border-border p-3">
-                    <div className="text-xs text-muted-foreground">Spiel-ID</div>
-                    <div className="font-semibold">{selectedGame.gameId}</div>
+                  <div className="grid grid-cols-2 gap-4 md:col-span-2">
+                    <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                      <div className="text-[10px] uppercase text-muted-foreground">Spieltag</div>
+                      <div className="font-semibold">{selectedGame.spieltag || '-'}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                      <div className="text-[10px] uppercase text-muted-foreground">Datum/Zeit</div>
+                      <div className="font-semibold">{selectedGame.dateTimeLabel || '-'}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                      <div className="text-[10px] uppercase text-muted-foreground">Status</div>
+                      <div className="font-semibold">{selectedGame.status || '-'}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                      <div className="text-[10px] uppercase text-muted-foreground">Saison</div>
+                      <div className="font-semibold">{selectedGame.seasonLabel}</div>
+                    </div>
                   </div>
-                )}
-                <div className="rounded-lg border border-border p-3">
-                  <div className="text-xs text-muted-foreground">Spieltag</div>
-                  <div className="font-semibold">{selectedGame.spieltag || '-'}</div>
+
+                  {selectedGame.info && (
+                    <div className="md:col-span-2 p-3 rounded-lg bg-primary/5 border border-primary/10">
+                      <div className="text-[10px] uppercase text-primary/70 font-bold">Zusatzinfo</div>
+                      <div className="text-sm">{selectedGame.info}</div>
+                    </div>
+                  )}
+                  
+                  {expertMode && (
+                    <div className="md:col-span-2 text-[10px] font-mono text-muted-foreground text-right">
+                      Game-ID: {selectedGame.gameId}
+                    </div>
+                  )}
                 </div>
-                <div className="rounded-lg border border-border p-3">
-                  <div className="text-xs text-muted-foreground">Datum/Zeit</div>
-                  <div className="font-semibold">{selectedGame.dateTimeLabel || '-'}</div>
-                </div>
-                <div className="rounded-lg border border-border p-3">
-                  <div className="text-xs text-muted-foreground">Status</div>
-                  <div className="font-semibold">{selectedGame.status || '-'}</div>
-                </div>
-                <div className="rounded-lg border border-border p-3">
-                  <div className="text-xs text-muted-foreground">Heim</div>
-                  <div className="font-semibold">{selectedGame.homeTeam}</div>
-                </div>
-                <div className="rounded-lg border border-border p-3">
-                  <div className="text-xs text-muted-foreground">Gast</div>
-                  <div className="font-semibold">{selectedGame.awayTeam}</div>
-                </div>
-                <div className="rounded-lg border border-border p-3 md:col-span-2">
-                  <div className="text-xs text-muted-foreground">Ergebnis / Führung</div>
-                  <div className="text-xl font-bold">
-                    {selectedGame.resultText} · <span className="text-base">{getLeadText(selectedGame)}</span>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border p-3 md:col-span-2">
-                  <div className="text-xs text-muted-foreground">Zusatzinfo</div>
-                  <div className="font-medium">{selectedGame.info || '-'}</div>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         )}
       </main>

@@ -3,9 +3,11 @@
 import { Fragment, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
-import { History, LogOut, Play, Trophy, BarChart3, FileDown, ArrowRight, TrendingUp, FileText, MessageSquare, ClipboardPenLine } from 'lucide-react';
+import { History, LogOut, Play, Trophy, BarChart3, FileDown, ArrowRight, TrendingUp, FileText, MessageSquare, ClipboardPenLine, Share2, Copy, Check } from 'lucide-react';
 import { Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
 import { useAuth } from '@/contexts/AuthContext';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 type DetailedThrowRow = {
   sessionId: string;
@@ -87,18 +89,40 @@ function getTrainingPlayer(trainer: Trainer | null): Player | null {
     return JSON.parse(playerAuth) as Player;
   }
 
-  if (!trainer) {
-    return null;
+  if (trainer) {
+    const trainerId = `T-${trainer.email.replace(/[^a-z0-9]/gi, '').slice(0, 10).toUpperCase()}`;
+    return {
+      id: trainerId,
+      name: trainer.name,
+      trainerEmail: trainer.email,
+      createdAt: new Date(0).toISOString(),
+      username: trainer.email,
+      tempPassword: '',
+      passwordResetRequired: false,
+    };
   }
 
-  const trainerId = `T-${trainer.email.replace(/[^a-z0-9]/gi, '').slice(0, 10).toUpperCase()}`;
+  // Support Guest Mode
+  const guestData = localStorage.getItem('guest_user');
+  if (guestData) {
+    const guest = JSON.parse(guestData) as { name: string };
+    return {
+      id: 'GUEST',
+      name: guest.name || 'Gast-Spieler',
+      trainerEmail: '',
+      createdAt: new Date().toISOString(),
+      username: 'guest',
+      tempPassword: '',
+      passwordResetRequired: false,
+    };
+  }
 
   return {
-    id: trainerId,
-    name: trainer.name,
-    trainerEmail: trainer.email,
-    createdAt: new Date(0).toISOString(),
-    username: trainer.email,
+    id: 'GUEST',
+    name: 'Gast-Spieler',
+    trainerEmail: '',
+    createdAt: new Date().toISOString(),
+    username: 'guest',
     tempPassword: '',
     passwordResetRequired: false,
   };
@@ -118,11 +142,23 @@ export default function TrainingHomePage() {
   const [managedPlayers, setManagedPlayers] = useState<Player[]>([]);
   const [recordForPlayerId, setRecordForPlayerId] = useState('');
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isMounted) return;
-    if (!player) {
-      router.push('/login');
+    if (!isMounted || !player) return;
+
+    if (player.id === 'GUEST') {
+      const stored = localStorage.getItem('guest_sessions');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          const timer = setTimeout(() => setSessions(parsed), 0);
+          return () => clearTimeout(timer);
+        } catch {
+          const timer = setTimeout(() => setSessions([]), 0);
+          return () => clearTimeout(timer);
+        }
+      }
       return;
     }
 
@@ -151,10 +187,11 @@ export default function TrainingHomePage() {
     return () => {
       cancelled = true;
     };
-  }, [isMounted, player, router, trainer]);
+  }, [isMounted, player, trainer]);
 
   const handleLogout = async () => {
     localStorage.removeItem('player_auth');
+    localStorage.removeItem('guest_user');
     await signOut();
     router.push('/login');
   };
@@ -173,6 +210,40 @@ export default function TrainingHomePage() {
       params.set('playerId', targetPlayerId);
     }
     router.push(`/training/session?${params.toString()}`);
+  };
+
+  const handleShare = async (session: TrainingSession) => {
+    // For guest mode, we encode the data. For real users, we could just send the ID.
+    // To keep it simple and universal, we encode essential session data.
+    const shareData = {
+      n: session.playerName || 'Spieler',
+      t: session.timestamp,
+      m: session.type,
+      s: getSessionTotal(session),
+      id: session.id
+    };
+    
+    const encoded = btoa(JSON.stringify(shareData)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const shareUrl = `${window.location.origin}/training/share?d=${encoded}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Kegel-Training: ${shareData.s} Holz`,
+          text: `Schau dir mein Training an: ${shareData.s} Holz im ${session.type === 'game_120' ? '120er' : '30er'} Modus!`,
+          url: shareUrl,
+        });
+      } catch (err) {
+        // Fallback to clipboard
+        await navigator.clipboard.writeText(shareUrl);
+        setCopiedId(session.id);
+        setTimeout(() => setCopiedId(null), 2000);
+      }
+    } else {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedId(session.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
   };
 
   const exportToCSV = () => {
@@ -303,35 +374,44 @@ export default function TrainingHomePage() {
       <Menubar />
       <main className="container mx-auto px-4 py-6 sm:py-10 space-y-8">
         {/* Welcome Header */}
-        <section className="bg-card p-6 sm:p-8 rounded-3xl border border-border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6">
+        <Card className="bg-card p-6 sm:p-8 rounded-3xl border border-border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-5">
             <div className="w-16 h-16 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center text-2xl font-bold shadow-lg shadow-primary/20">
               {player.name.substring(0, 2).toUpperCase()}
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold">Gut Holz, {player.name.split(',')[0]}!</h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                {trainer ? 'Selbst trainieren oder für einen Spieler mitschreiben.' : 'Willkommen in deinem Trainings-Center.'}
-              </p>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                {player.id === 'GUEST' && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-bold uppercase border border-amber-500/20">Gast-Modus</span>
+                )}
+                <p className="text-muted-foreground text-sm">
+                  {trainer ? 'Selbst trainieren oder für einen Spieler mitschreiben.' : 'Willkommen in deinem Trainings-Center.'}
+                </p>
+              </div>
             </div>
           </div>
           <div className="flex gap-3">
-            <button onClick={exportToCSV} className="p-3 rounded-xl border border-border hover:bg-muted transition-colors text-muted-foreground" title="CSV Export">
+            <Button variant="outline" size="icon" onClick={exportToCSV} title="CSV Export">
               <FileDown size={20} />
-            </button>
-            <button onClick={exportToPDF} className="p-3 rounded-xl border border-border hover:bg-muted transition-colors text-muted-foreground" title="PDF Export">
+            </Button>
+            <Button variant="outline" size="icon" onClick={exportToPDF} title="PDF Export">
               <FileText size={20} />
-            </button>
-            <button onClick={handleLogout} className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-all">
-              <LogOut size={18} />
-              Logout
-            </button>
+            </Button>
+            <Button 
+              variant="outline" 
+              className={player.id === 'GUEST' ? "text-amber-600 hover:bg-amber-500/10" : "text-destructive hover:bg-destructive/10"} 
+              onClick={handleLogout}
+            >
+              <LogOut size={18} className="mr-2" />
+              {player.id === 'GUEST' ? 'Gast-Sitzung beenden' : 'Logout'}
+            </Button>
           </div>
-        </section>
+        </Card>
 
         {/* Quick Stats & Graph */}
         <div className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-2 bg-card rounded-3xl border border-border p-6 shadow-sm">
+          <Card className="md:col-span-2 bg-card rounded-3xl border border-border p-6 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <TrendingUp size={20} className="text-primary" />
@@ -380,9 +460,9 @@ export default function TrainingHomePage() {
                 </div>
               )}
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-primary text-primary-foreground rounded-3xl p-6 shadow-xl shadow-primary/20 flex flex-col justify-between">
+          <Card className="bg-primary text-primary-foreground rounded-3xl p-6 shadow-xl shadow-primary/20 flex flex-col justify-between border-none">
             <div>
               <div className="text-primary-foreground/70 text-xs font-bold uppercase tracking-widest mb-1">Bestwert</div>
               <div className="text-5xl font-black mb-2">{sessions.length > 0 ? Math.max(...sessions.map(s => getSessionTotal(s))) : 0}</div>
@@ -392,7 +472,7 @@ export default function TrainingHomePage() {
               <div className="text-xs">Sitzungen: {sessions.length}</div>
               <BarChart3 size={24} className="opacity-50" />
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* Mode Selection */}
@@ -430,7 +510,7 @@ export default function TrainingHomePage() {
         </section>
 
         {trainer && managedPlayers.length > 0 && (
-          <section className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+          <Card className="rounded-3xl border border-border bg-card p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-bold">
@@ -454,26 +534,28 @@ export default function TrainingHomePage() {
                   </option>
                 ))}
               </select>
-              <button
+              <Button
+                variant="outline"
                 onClick={() => startSession('standard', recordForPlayerId)}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-semibold hover:bg-muted"
+                className="gap-2 h-auto py-3 rounded-2xl"
               >
                 <Play size={16} />
                 Standard mitschreiben
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => startSession('game_120', recordForPlayerId)}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-semibold hover:bg-muted"
+                className="gap-2 h-auto py-3 rounded-2xl"
               >
                 <Trophy size={16} />
                 120 mitschreiben
-              </button>
+              </Button>
             </div>
-          </section>
+          </Card>
         )}
 
         <section>
-          <div className="bg-card rounded-3xl border border-border p-6 shadow-sm">
+          <Card className="bg-card rounded-3xl border border-border p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <MessageSquare size={20} className="text-primary" />
@@ -482,7 +564,7 @@ export default function TrainingHomePage() {
             </div>
             <div className="mt-4 space-y-3">
               {messages.length === 0 ? (
-                <div className="rounded-2xl border-2 border-dashed border-border p-6 text-sm text-muted-foreground">
+                <div className="rounded-2xl border-2 border-dashed border-border p-6 text-sm text-muted-foreground text-center italic">
                   Noch keine Nachrichten vorhanden.
                 </div>
               ) : (
@@ -499,11 +581,11 @@ export default function TrainingHomePage() {
                 ))
               )}
             </div>
-          </div>
+          </Card>
         </section>
 
         {/* Detailed History */}
-        <section className="bg-card rounded-3xl border border-border overflow-hidden shadow-sm">
+        <Card className="bg-card rounded-3xl border border-border overflow-hidden shadow-sm">
           <div className="p-6 border-b border-border flex items-center justify-between">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <History size={20} className="text-primary" />
@@ -537,7 +619,7 @@ export default function TrainingHomePage() {
                   
                   return (
                     <Fragment key={s.id}>
-                      <tr key={s.id} className="hover:bg-muted/30 transition-colors">
+                      <tr className="hover:bg-muted/30 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium">{new Date(s.timestamp).toLocaleDateString()}</div>
                           <div className="text-[10px] text-muted-foreground">{new Date(s.timestamp).toLocaleTimeString()}</div>
@@ -555,13 +637,24 @@ export default function TrainingHomePage() {
                         <td className="px-6 py-4 text-center font-bold text-lg">{total}</td>
                         <td className="px-6 py-4 text-center text-sm font-mono">{avg}</td>
                         <td className="px-6 py-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedSessionId((current) => current === s.id ? null : s.id)}
-                            className="text-primary hover:underline text-xs font-semibold"
-                          >
-                            {isExpanded ? 'Schließen' : 'Details'}
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0" 
+                              onClick={() => handleShare(s)}
+                              title="Teilen"
+                            >
+                              {copiedId === s.id ? <Check className="h-4 w-4 text-green-500" /> : <Share2 className="h-4 w-4" />}
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedSessionId((current) => current === s.id ? null : s.id)}
+                              className="text-primary hover:underline text-xs font-semibold px-2"
+                            >
+                              {isExpanded ? 'Schließen' : 'Details'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       {isExpanded && (
@@ -583,7 +676,7 @@ export default function TrainingHomePage() {
                                       <td className="px-4 py-3 font-medium">{row.lane}</td>
                                       <td className="px-4 py-3">{row.throwNumber}</td>
                                       <td className="px-4 py-3 font-semibold">{row.holz}</td>
-                                      <td className="px-4 py-3">
+                                      <td className="px-4 py-3 text-xs text-muted-foreground">
                                         {row.pins.length > 0 ? row.pins.join(', ') : 'Fehlwurf'}
                                       </td>
                                     </tr>
@@ -600,7 +693,7 @@ export default function TrainingHomePage() {
               </tbody>
             </table>
           </div>
-        </section>
+        </Card>
       </main>
     </div>
   );

@@ -5,7 +5,12 @@ import { useSearchParams } from 'next/navigation';
 import Menubar from '@/components/menubar';
 import ApiService from '@/lib/api-service';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { parseDateTimeString } from '@/lib/date-parser';
+import { cn } from "@/lib/utils";
 import { readDefaultLeagueId } from '@/lib/client-settings';
 import { useTheme } from '@/lib/theme-context';
 
@@ -730,6 +735,11 @@ function TournamentsPageContent() {
     }
   };
 
+  const isSubstitution = (name: string | number | null | undefined) => {
+    const n = String(name || '');
+    return n.includes('(A)') || n.includes('(E)') || n.toLowerCase().includes('ab wurf');
+  };
+
   const renderGameDetailsTable = (rows: GameDetailRow[]) => {
     if (!rows || rows.length === 0) return null;
 
@@ -743,88 +753,74 @@ function TournamentsPageContent() {
     const diffLabel = diff === null ? '' : diff > 0 ? `+${diff}-` : diff < 0 ? `${diff}+` : '0';
 
     return (
-      <div className="mt-3 overflow-x-auto rounded-xl border border-border bg-gradient-to-br from-red-500/10 via-background to-rose-500/5">
-        <table className="min-w-full table-fixed text-sm bg-card/80">
-          <thead className="bg-muted/70">
-            <tr>
-              <th className="py-2 px-3 text-right w-[16rem]">Spieler</th>
-              <th className="py-2 px-2 text-center hidden sm:table-cell">1</th>
-              <th className="py-2 px-2 text-center hidden sm:table-cell">2</th>
-              <th className="py-2 px-2 text-center hidden sm:table-cell">3</th>
-              <th className="py-2 px-2 text-center hidden sm:table-cell">4</th>
-              <th className="py-2 px-2 text-center">Kegel</th>
-              <th className="py-2 px-2 text-center">SP</th>
-              <th className="py-2 px-2 text-center">MP</th>
-              <th className="py-2 px-2 text-center w-10"></th>
-              <th className="py-2 px-2 text-center">MP</th>
-              <th className="py-2 px-2 text-center">SP</th>
-              <th className="py-2 px-2 text-center">Kegel</th>
-              <th className="py-2 px-2 text-center hidden sm:table-cell">4</th>
-              <th className="py-2 px-2 text-center hidden sm:table-cell">3</th>
-              <th className="py-2 px-2 text-center hidden sm:table-cell">2</th>
-              <th className="py-2 px-2 text-center hidden sm:table-cell">1</th>
-              <th className="py-2 px-3 text-left w-[16rem]">Spieler</th>
-            </tr>
-          </thead>
-          <tbody>
+      <Card className="overflow-hidden border border-border/50 shadow-inner">
+        <Table className="text-xs">
+          <TableHeader className="bg-muted/50">
+            <TableRow>
+              <TableHead className="text-right w-[14rem]">Spieler</TableHead>
+              <TableHead className="text-center hidden sm:table-cell">1</TableHead>
+              <TableHead className="text-center hidden sm:table-cell">2</TableHead>
+              <TableHead className="text-center hidden sm:table-cell">3</TableHead>
+              <TableHead className="text-center hidden sm:table-cell">4</TableHead>
+              <TableHead className="text-center font-bold">Kegel</TableHead>
+              <TableHead className="text-center">SP</TableHead>
+              <TableHead className="text-center">MP</TableHead>
+              <TableHead className="text-center w-8 p-0 font-bold text-primary">{diffLabel}</TableHead>
+              <TableHead className="text-center">MP</TableHead>
+              <TableHead className="text-center">SP</TableHead>
+              <TableHead className="text-center font-bold">Kegel</TableHead>
+              <TableHead className="text-center hidden sm:table-cell">4</TableHead>
+              <TableHead className="text-center hidden sm:table-cell">3</TableHead>
+              <TableHead className="text-center hidden sm:table-cell">2</TableHead>
+              <TableHead className="text-center hidden sm:table-cell">1</TableHead>
+              <TableHead className="text-left w-[14rem]">Spieler</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((row, idx) => {
               const isNoteRow =
                 row.length > 16 || (row?.[0] && row.slice(1).every((v) => v === '' || v === undefined));
               if (isNoteRow) {
                 return (
-                  <tr key={`note-${idx}`}>
-                    <td colSpan={17} className="py-2 px-3 text-sm text-muted-foreground">
+                  <TableRow key={`note-${idx}`} className="hover:bg-transparent border-none">
+                    <TableCell colSpan={17} className="py-2 px-3 italic text-muted-foreground text-[11px] bg-muted/10">
                       {row[0] || ''}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               }
 
               const isTotals = row?.[0] === '' && row?.[15] === '' && row?.[5] && row?.[10];
+              if (isTotals) return null;
 
-              const nameLeft = row[0];
-              const set1 = row[1];
-              const set2 = row[2];
-              const set3 = row[3];
-              const set4 = row[4];
-              const kegelLeft = row[5];
-              const spLeft = row[6];
-              const mpLeft = row[7];
-
-              const mpRight = row[8];
-              const spRight = row[9];
-              const kegelRight = row[10];
-              const set4Right = row[11];
-              const set3Right = row[12];
-              const set2Right = row[13];
-              const set1Right = row[14];
-              const nameRight = row[15];
+              const leftSub = isSubstitution(row[0]);
+              const rightSub = isSubstitution(row[15]);
 
               return (
-                <tr key={`row-${idx}`} className="border-b border-border">
-                  <td className="py-2 px-3 text-right truncate">{displayValue(nameLeft)}</td>
-                  <td className="py-2 px-2 text-center hidden sm:table-cell">{displayValue(set1)}</td>
-                  <td className="py-2 px-2 text-center hidden sm:table-cell">{displayValue(set2)}</td>
-                  <td className="py-2 px-2 text-center hidden sm:table-cell">{displayValue(set3)}</td>
-                  <td className="py-2 px-2 text-center hidden sm:table-cell">{displayValue(set4)}</td>
-                  <td className="py-2 px-2 text-center">{displayValue(kegelLeft)}</td>
-                  <td className="py-2 px-2 text-center">{displayValue(spLeft)}</td>
-                  <td className="py-2 px-2 text-center">{displayValue(mpLeft)}</td>
-                  <td className="py-2 px-2 text-center font-semibold text-primary">{isTotals ? diffLabel : ''}</td>
-                  <td className="py-2 px-2 text-center">{displayValue(mpRight)}</td>
-                  <td className="py-2 px-2 text-center">{displayValue(spRight)}</td>
-                  <td className="py-2 px-2 text-center">{displayValue(kegelRight)}</td>
-                  <td className="py-2 px-2 text-center hidden sm:table-cell">{displayValue(set4Right)}</td>
-                  <td className="py-2 px-2 text-center hidden sm:table-cell">{displayValue(set3Right)}</td>
-                  <td className="py-2 px-2 text-center hidden sm:table-cell">{displayValue(set2Right)}</td>
-                  <td className="py-2 px-2 text-center hidden sm:table-cell">{displayValue(set1Right)}</td>
-                  <td className="py-2 px-3 text-left truncate">{displayValue(nameRight)}</td>
-                </tr>
+                <TableRow key={`row-${idx}`} className={cn("h-8 transition-colors", (leftSub || rightSub) ? "bg-amber-500/5" : (idx % 2 === 0 ? "bg-background" : "bg-muted/5"))}>
+                  <TableCell className={cn("py-1 px-3 text-right truncate font-medium", leftSub && "text-amber-600 italic")}>{displayValue(row[0])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center hidden sm:table-cell text-muted-foreground">{displayValue(row[1])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center hidden sm:table-cell text-muted-foreground">{displayValue(row[2])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center hidden sm:table-cell text-muted-foreground">{displayValue(row[3])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center hidden sm:table-cell text-muted-foreground">{displayValue(row[4])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center font-bold">{displayValue(row[5])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center">{displayValue(row[6])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center font-semibold text-green-600 dark:text-green-400">{displayValue(row[7])}</TableCell>
+                  <TableCell className="py-1 p-0 text-center"></TableCell>
+                  <TableCell className="py-1 px-1 text-center font-semibold text-green-600 dark:text-green-400">{displayValue(row[8])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center">{displayValue(row[9])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center font-bold">{displayValue(row[10])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center hidden sm:table-cell text-muted-foreground">{displayValue(row[11])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center hidden sm:table-cell text-muted-foreground">{displayValue(row[12])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center hidden sm:table-cell text-muted-foreground">{displayValue(row[13])}</TableCell>
+                  <TableCell className="py-1 px-1 text-center hidden sm:table-cell text-muted-foreground">{displayValue(row[14])}</TableCell>
+                  <TableCell className={cn("py-1 px-3 text-left truncate font-medium", rightSub && "text-amber-600 italic")}>{displayValue(row[15])}</TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </Card>
     );
   };
 
@@ -841,114 +837,105 @@ function TournamentsPageContent() {
   return (
     <div className="min-h-screen bg-background">
       <Menubar />
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8 rounded-2xl border border-border bg-gradient-to-br from-red-500/15 via-background to-rose-500/10 p-6 shadow-sm">
-          <h1 className="text-3xl font-bold text-foreground">Turniere</h1>
-          <p className="text-muted-foreground">Spielplan nach Saison und Liga.</p>
+      <main className="container mx-auto px-4 py-8 space-y-8">
+        <Card className="bg-gradient-to-br from-red-500/15 via-background to-rose-500/10 border-none shadow-md overflow-hidden">
+          <CardHeader>
+            <CardTitle className="text-3xl font-bold">Turniere</CardTitle>
+            <CardDescription>Spielplan nach Saison und Liga.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex flex-wrap gap-4 items-end rounded-xl border border-border bg-card/50 p-4 shadow-sm">
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="seasonFilter" className="text-sm font-medium">Saison</label>
+                <Select
+                  id="seasonFilter"
+                  value={selectedSeason}
+                  onChange={(e) => handleSeasonChange(e.target.value)}
+                  className="w-[180px]"
+                >
+                  {seasons.map((season) => (
+                    <option key={season.season_id} value={season.season_id}>
+                      {season.yearof_season}
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-          <div className="mt-4 flex flex-wrap gap-4 items-end rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <div className="flex flex-col">
-              <label htmlFor="seasonFilter" className="text-sm font-medium text-foreground mb-1">
-                Saison
-              </label>
-              <select
-                id="seasonFilter"
-                value={selectedSeason}
-                onChange={(e) => handleSeasonChange(e.target.value)}
-                className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {seasons.map((season) => (
-                  <option key={season.season_id} value={season.season_id}>
-                    {season.yearof_season} (ID: {season.season_id})
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="leagueFilter" className="text-sm font-medium">Liga</label>
+                <Select
+                  id="leagueFilter"
+                  value={selectedLeague}
+                  onChange={(e) => setSelectedLeague(e.target.value)}
+                  className="w-[220px]"
+                >
+                  {leagues.map((league) => (
+                    <option key={league.liga_id} value={league.liga_id}>
+                      {league.name_der_liga}
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-            <div className="flex flex-col">
-              <label htmlFor="leagueFilter" className="text-sm font-medium text-foreground mb-1">
-                Liga
-              </label>
-              <select
-                id="leagueFilter"
-                value={selectedLeague}
-                onChange={(e) => setSelectedLeague(e.target.value)}
-                className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {leagues.map((league) => (
-                  <option key={league.liga_id} value={league.liga_id}>
-                    {league.name_der_liga}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="teamFilter" className="text-sm font-medium">Mannschaft</label>
+                <Select
+                  id="teamFilter"
+                  value={selectedTeam}
+                  onChange={(e) => setSelectedTeam(e.target.value)}
+                  className="w-[280px]"
+                >
+                  <option value="">Alle Mannschaften</option>
+                  {teamOptions.map((team) => (
+                    <option key={team} value={team}>
+                      {team}
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-            <div className="flex flex-col min-w-[18rem]">
-              <label htmlFor="teamFilter" className="text-sm font-medium text-foreground mb-1">
-                Mannschaft
-              </label>
-              <select
-                id="teamFilter"
-                value={selectedTeam}
-                onChange={(e) => setSelectedTeam(e.target.value)}
-                className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Alle Mannschaften</option>
-                {teamOptions.map((team) => (
-                  <option key={team} value={team}>
-                    {team}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col">
-              <label htmlFor="livePollFilter" className="text-sm font-medium text-foreground mb-1">
-                Live-Refresh
-              </label>
-              <select
-                id="livePollFilter"
-                value={String(livePollingMinutes)}
-                onChange={(e) => setLivePollingMinutes(Number(e.target.value) === 10 ? 10 : 5)}
-                className="bg-card border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="5">Alle 5 Minuten</option>
-                <option value="10">Alle 10 Minuten</option>
-              </select>
-            </div>
-          </div>
-
-          {selectedTeam && (
-            <div className="mt-4 rounded-xl border border-border bg-card/70 p-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="text-sm text-muted-foreground">
-                  Team: <span className="font-semibold text-foreground">{selectedTeam}</span>
-                </div>
-                <div className="rounded-md border border-border px-2 py-1 text-xs">
-                  Gespielt: <span className="font-semibold">{playedGames.length}</span>
-                </div>
-                <div className="rounded-md border border-border px-2 py-1 text-xs">
-                  Offen: <span className="font-semibold">{upcomingGames.length}</span>
-                </div>
-                <div className="rounded-md border border-border px-2 py-1 text-xs">
-                  Letztes Live-Update:{' '}
-                  <span className="font-semibold">
-                    {lastLiveSync ? lastLiveSync.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '-'}
-                  </span>
-                </div>
-                {teamIcsDataUri && (
-                  <a
-                    href={teamIcsDataUri}
-                    download={`spielplan-${selectedTeam.replace(/\s+/g, '-').toLowerCase()}.ics`}
-                    className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-accent"
-                  >
-                    ICS herunterladen
-                  </a>
-                )}
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="livePollFilter" className="text-sm font-medium">Live-Refresh</label>
+                <Select
+                  id="livePollFilter"
+                  value={String(livePollingMinutes)}
+                  onChange={(e) => setLivePollingMinutes(Number(e.target.value) === 10 ? 10 : 5)}
+                  className="w-[180px]"
+                >
+                  <option value="5">Alle 5 Minuten</option>
+                  <option value="10">Alle 10 Minuten</option>
+                </Select>
               </div>
             </div>
-          )}
-        </div>
+
+            {selectedTeam && (
+              <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-border bg-card/70 text-sm">
+                <div className="text-muted-foreground">
+                  Team: <span className="font-semibold text-foreground">{selectedTeam}</span>
+                </div>
+                <div className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium border border-primary/20">
+                  Gespielt: {playedGames.length}
+                </div>
+                <div className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-xs font-medium border border-border">
+                  Offen: {upcomingGames.length}
+                </div>
+                <div className="text-xs text-muted-foreground ml-auto">
+                  Letztes Update: {lastLiveSync ? lastLiveSync.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                </div>
+                {teamIcsDataUri && (
+                  <Button variant="outline" size="sm" asChild className="ml-2">
+                    <a
+                      href={teamIcsDataUri}
+                      download={`spielplan-${selectedTeam.replace(/\s+/g, '-').toLowerCase()}.ics`}
+                    >
+                      ICS herunterladen
+                    </a>
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {loading && <LoadingSpinner label="Loading tournament schedule..." />}
 
@@ -961,20 +948,20 @@ function TournamentsPageContent() {
             {Array.from(groupedSpieltage.keys()).map((spieltag) => {
               const rows = groupedSpieltage.get(spieltag) || [];
               return (
-                <section key={spieltag} className="space-y-3">
-                  <h2 className="text-xl font-semibold text-foreground">{spieltag}</h2>
-                  <div className="overflow-x-auto rounded-2xl border border-border bg-gradient-to-br from-red-500/10 via-background to-rose-500/5 shadow-sm">
-                    <table className="min-w-full bg-card/80 rounded-2xl overflow-hidden border border-border">
-                      <thead className="bg-muted/70">
-                        <tr>
-                          <th className="py-3 px-4 text-left text-foreground">Datum/Zeit</th>
-                          {expertMode && <th className="py-3 px-4 text-left text-foreground">Game ID</th>}
-                          <th className="py-3 px-4 text-left text-foreground">Heim</th>
-                          <th className="py-3 px-4 text-left text-foreground">Gast</th>
-                          <th className="py-3 px-4 text-left text-foreground">Ergebnis</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                <section key={spieltag} className="space-y-4">
+                  <h2 className="text-xl font-semibold px-1">{spieltag}</h2>
+                  <Card className="border border-border bg-gradient-to-br from-red-500/5 via-background to-rose-500/5 shadow-sm overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[140px]">Datum/Zeit</TableHead>
+                          {expertMode && <TableHead className="w-[100px]">Game ID</TableHead>}
+                          <TableHead className="w-1/3">Heim</TableHead>
+                          <TableHead className="w-1/3">Gast</TableHead>
+                          <TableHead className="w-[150px] text-right">Ergebnis</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {rows.map((spiel, idx) => {
                           const isOpen = openGameId === spiel.game_id;
                           const score = parseResultScore(`${spiel.points_home} : ${spiel.points_away}`) ?? parseResultScore(spiel.result);
@@ -988,37 +975,37 @@ function TournamentsPageContent() {
                             : null;
                           return (
                             <React.Fragment key={`${spiel.game_id}-${idx}`}>
-                              <tr
-                                className="border-b border-border hover:bg-accent/40 cursor-pointer"
+                              <TableRow
+                                className="cursor-pointer"
                                 onClick={() => toggleGame(spiel.game_id)}
                               >
-                                <td className="py-3 px-4 whitespace-nowrap">{displayValue(spiel.date_time)}</td>
+                                <TableCell className="whitespace-nowrap font-medium text-xs sm:text-sm">{displayValue(spiel.date_time)}</TableCell>
                                 {expertMode && (
-                                  <td className="py-3 px-4 whitespace-nowrap font-mono text-xs">{displayValue(spiel.game_id)}</td>
+                                  <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">{displayValue(spiel.game_id)}</TableCell>
                                 )}
-                                <td className="py-3 px-4 min-w-[10rem]">{displayValue(spiel.team_home)}</td>
-                                <td className="py-3 px-4 min-w-[10rem]">{displayValue(spiel.team_away)}</td>
-                                <td className="py-3 px-4 whitespace-nowrap">
-                                  <div>{displayValue(spiel.result)}</div>
+                                <TableCell className="font-semibold text-sm sm:text-base w-1/3">{displayValue(spiel.team_home)}</TableCell>
+                                <TableCell className="font-semibold text-sm sm:text-base w-1/3">{displayValue(spiel.team_away)}</TableCell>
+                                <TableCell className="text-right w-[150px]">
+                                  <div className="font-bold text-primary tabular-nums">{displayValue(spiel.result)}</div>
                                   {leader && (
-                                    <div className="text-xs text-muted-foreground">
-                                      {leader}
-                                      {pointDiff !== null ? ` (${pointDiff})` : ''}
+                                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                                      {leader}{pointDiff !== null ? ` (${pointDiff})` : ''}
                                     </div>
                                   )}
-                                </td>
-                              </tr>
+                                </TableCell>
+                              </TableRow>
                               {isOpen && (
-                                <tr key={`${spiel.game_id}-details`}>
-                                  <td colSpan={expertMode ? 5 : 4} className="px-4 pb-4">
+                                <TableRow key={`${spiel.game_id}-details`}>
+                                  <TableCell colSpan={expertMode ? 5 : 4} className="bg-muted/30 p-6">
                                     {detailsLoading[spiel.game_id] && (
-                                      <LoadingSpinner label="Loading game results..." className="py-6" size="sm" />
+                                      <LoadingSpinner label="Lade Ergebnisse..." className="py-6" size="sm" />
                                     )}
                                     {!detailsLoading[spiel.game_id] && (
-                                      <>
-                                        <div className="mt-3 flex justify-end">
-                                          <button
-                                            type="button"
+                                      <div className="space-y-4">
+                                        <div className="flex justify-end">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               downloadGameDetailsAsPng(
@@ -1027,28 +1014,30 @@ function TournamentsPageContent() {
                                                 gameNotes[spiel.game_id] || ''
                                               );
                                             }}
-                                            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-accent"
                                           >
-                                            Ergebnis als PNG exportieren
-                                          </button>
+                                            Export PNG
+                                          </Button>
                                         </div>
                                         {renderGameDetailsTable(gameDetails[spiel.game_id] || [])}
                                         {gameNotes[spiel.game_id] && gameNotes[spiel.game_id].trim() !== '' && (
-                                          <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                                            <span className="font-medium text-foreground">Hinweise:</span> {gameNotes[spiel.game_id]}
-                                          </div>
+                                          <Card className="bg-muted/50 border-none">
+                                            <CardContent className="p-3 text-sm text-muted-foreground">
+                                              <span className="font-bold text-foreground mr-2">Hinweise:</span> 
+                                              {gameNotes[spiel.game_id]}
+                                            </CardContent>
+                                          </Card>
                                         )}
-                                      </>
+                                      </div>
                                     )}
-                                  </td>
-                                </tr>
+                                  </TableCell>
+                                </TableRow>
                               )}
                             </React.Fragment>
                           );
                         })}
-                      </tbody>
-                    </table>
-                  </div>
+                      </TableBody>
+                    </Table>
+                  </Card>
                 </section>
               );
             })}

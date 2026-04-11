@@ -25,20 +25,18 @@ function createPool(connectionString: string) {
   if (cached) return cached;
 
   const isVercel = process.env.VERCEL === '1';
-  const isSupabase = connectionString.includes('supabase') || process.env.NEXT_PUBLIC_SUPABASE_URL;
-
+  
   const poolConfig: PoolConfig = {
     connectionString,
     max: isVercel ? 2 : 5,
     idleTimeoutMillis: isVercel ? 10000 : 30000,
     connectionTimeoutMillis: isVercel ? 5000 : 10000,
-  };
-
-  if (isSupabase) {
-    poolConfig.ssl = {
+    // Supabase and most cloud providers require SSL. 
+    // We disable certificate validation because Supabase uses self-signed/internal CA certificates for the direct pooler.
+    ssl: {
       rejectUnauthorized: false,
-    };
-  }
+    },
+  };
 
   const pool = new Pool(poolConfig);
 

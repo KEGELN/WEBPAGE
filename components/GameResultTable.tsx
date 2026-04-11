@@ -8,6 +8,11 @@ function displayValue(value: GameDetailCell) {
   return raw && raw !== 'undefined' ? raw : '-';
 }
 
+function isSubstitution(name: GameDetailCell) {
+  const n = String(name || '');
+  return n.includes('(A)') || n.includes('(E)') || n.toLowerCase().includes('ab wurf');
+}
+
 export default function GameResultTable({ rows }: { rows: GameDetailRow[] }) {
   if (!rows || rows.length === 0) return null;
 
@@ -23,25 +28,25 @@ export default function GameResultTable({ rows }: { rows: GameDetailRow[] }) {
   return (
     <div className="mt-4 overflow-x-auto rounded-2xl border border-border bg-gradient-to-br from-red-500/10 via-background to-rose-500/5">
       <table className="min-w-full table-fixed bg-card/90 text-sm">
-        <thead className="bg-muted/70">
+        <thead className="bg-muted/70 text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
           <tr>
-            <th className="w-[16rem] px-3 py-2 text-right">Spieler</th>
-            <th className="hidden px-2 py-2 text-center sm:table-cell">1</th>
-            <th className="hidden px-2 py-2 text-center sm:table-cell">2</th>
-            <th className="hidden px-2 py-2 text-center sm:table-cell">3</th>
-            <th className="hidden px-2 py-2 text-center sm:table-cell">4</th>
-            <th className="px-2 py-2 text-center">Kegel</th>
-            <th className="px-2 py-2 text-center">SP</th>
-            <th className="px-2 py-2 text-center">MP</th>
-            <th className="w-10 px-2 py-2 text-center"></th>
-            <th className="px-2 py-2 text-center">MP</th>
-            <th className="px-2 py-2 text-center">SP</th>
-            <th className="px-2 py-2 text-center">Kegel</th>
-            <th className="hidden px-2 py-2 text-center sm:table-cell">4</th>
-            <th className="hidden px-2 py-2 text-center sm:table-cell">3</th>
-            <th className="hidden px-2 py-2 text-center sm:table-cell">2</th>
-            <th className="hidden px-2 py-2 text-center sm:table-cell">1</th>
-            <th className="w-[16rem] px-3 py-2 text-left">Spieler</th>
+            <th className="w-[16rem] px-3 py-3 text-right">Spieler</th>
+            <th className="hidden px-2 py-3 text-center sm:table-cell">1</th>
+            <th className="hidden px-2 py-3 text-center sm:table-cell">2</th>
+            <th className="hidden px-2 py-3 text-center sm:table-cell">3</th>
+            <th className="hidden px-2 py-3 text-center sm:table-cell">4</th>
+            <th className="px-2 py-3 text-center">Kegel</th>
+            <th className="px-2 py-3 text-center">SP</th>
+            <th className="px-2 py-3 text-center">MP</th>
+            <th className="w-10 px-2 py-3 text-center text-primary font-black">{diffLabel}</th>
+            <th className="px-2 py-3 text-center">MP</th>
+            <th className="px-2 py-3 text-center">SP</th>
+            <th className="px-2 py-3 text-center">Kegel</th>
+            <th className="hidden px-2 py-3 text-center sm:table-cell">4</th>
+            <th className="hidden px-2 py-3 text-center sm:table-cell">3</th>
+            <th className="hidden px-2 py-3 text-center sm:table-cell">2</th>
+            <th className="hidden px-2 py-3 text-center sm:table-cell">1</th>
+            <th className="w-[16rem] px-3 py-3 text-left">Spieler</th>
           </tr>
         </thead>
         <tbody>
@@ -51,7 +56,7 @@ export default function GameResultTable({ rows }: { rows: GameDetailRow[] }) {
             if (isNoteRow) {
               return (
                 <tr key={`note-${idx}`}>
-                  <td colSpan={17} className="px-3 py-2 text-sm text-muted-foreground">
+                  <td colSpan={17} className="px-3 py-2 text-xs italic text-muted-foreground bg-muted/20">
                     {row[0] || ''}
                   </td>
                 </tr>
@@ -59,6 +64,7 @@ export default function GameResultTable({ rows }: { rows: GameDetailRow[] }) {
             }
 
             const isTotals = row?.[0] === '' && row?.[15] === '' && row?.[5] && row?.[10];
+            if (isTotals) return null;
 
             const nameLeft = row[0];
             const set1 = row[1];
@@ -78,25 +84,32 @@ export default function GameResultTable({ rows }: { rows: GameDetailRow[] }) {
             const set1Right = row[14];
             const nameRight = row[15];
 
+            const leftSub = isSubstitution(nameLeft);
+            const rightSub = isSubstitution(nameRight);
+
             return (
-              <tr key={`row-${idx}`} className="border-b border-border">
-                <td className="truncate px-3 py-2 text-right">{displayValue(nameLeft)}</td>
-                <td className="hidden px-2 py-2 text-center sm:table-cell">{displayValue(set1)}</td>
-                <td className="hidden px-2 py-2 text-center sm:table-cell">{displayValue(set2)}</td>
-                <td className="hidden px-2 py-2 text-center sm:table-cell">{displayValue(set3)}</td>
-                <td className="hidden px-2 py-2 text-center sm:table-cell">{displayValue(set4)}</td>
-                <td className="px-2 py-2 text-center">{displayValue(kegelLeft)}</td>
+              <tr key={`row-${idx}`} className={`border-b border-border transition-colors hover:bg-muted/30 ${leftSub || rightSub ? 'bg-amber-500/5' : ''}`}>
+                <td className={`truncate px-3 py-2 text-right font-medium ${leftSub ? 'text-amber-600 italic' : ''}`}>
+                  {displayValue(nameLeft)}
+                </td>
+                <td className="hidden px-2 py-2 text-center sm:table-cell text-muted-foreground">{displayValue(set1)}</td>
+                <td className="hidden px-2 py-2 text-center sm:table-cell text-muted-foreground">{displayValue(set2)}</td>
+                <td className="hidden px-2 py-2 text-center sm:table-cell text-muted-foreground">{displayValue(set3)}</td>
+                <td className="hidden px-2 py-2 text-center sm:table-cell text-muted-foreground">{displayValue(set4)}</td>
+                <td className="px-2 py-2 text-center font-bold">{displayValue(kegelLeft)}</td>
                 <td className="px-2 py-2 text-center">{displayValue(spLeft)}</td>
-                <td className="px-2 py-2 text-center">{displayValue(mpLeft)}</td>
-                <td className="px-2 py-2 text-center font-semibold text-primary">{isTotals ? diffLabel : ''}</td>
-                <td className="px-2 py-2 text-center">{displayValue(mpRight)}</td>
+                <td className="px-2 py-2 text-center font-bold text-green-600 dark:text-green-400">{displayValue(mpLeft)}</td>
+                <td className="px-2 py-2 text-center"></td>
+                <td className="px-2 py-2 text-center font-bold text-green-600 dark:text-green-400">{displayValue(mpRight)}</td>
                 <td className="px-2 py-2 text-center">{displayValue(spRight)}</td>
-                <td className="px-2 py-2 text-center">{displayValue(kegelRight)}</td>
-                <td className="hidden px-2 py-2 text-center sm:table-cell">{displayValue(set4Right)}</td>
-                <td className="hidden px-2 py-2 text-center sm:table-cell">{displayValue(set3Right)}</td>
-                <td className="hidden px-2 py-2 text-center sm:table-cell">{displayValue(set2Right)}</td>
-                <td className="hidden px-2 py-2 text-center sm:table-cell">{displayValue(set1Right)}</td>
-                <td className="truncate px-3 py-2 text-left">{displayValue(nameRight)}</td>
+                <td className="px-2 py-2 text-center font-bold">{displayValue(kegelRight)}</td>
+                <td className="hidden px-2 py-2 text-center sm:table-cell text-muted-foreground">{displayValue(set4Right)}</td>
+                <td className="hidden px-2 py-2 text-center sm:table-cell text-muted-foreground">{displayValue(set3Right)}</td>
+                <td className="hidden px-2 py-2 text-center sm:table-cell text-muted-foreground">{displayValue(set2Right)}</td>
+                <td className="hidden px-2 py-2 text-center sm:table-cell text-muted-foreground">{displayValue(set1Right)}</td>
+                <td className={`truncate px-3 py-2 text-left font-medium ${rightSub ? 'text-amber-600 italic' : ''}`}>
+                  {displayValue(nameRight)}
+                </td>
               </tr>
             );
           })}
