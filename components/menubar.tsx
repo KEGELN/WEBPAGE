@@ -98,6 +98,9 @@ export default function Menubar() {
             <Link href="/player" className="hover:text-primary transition-colors duration-200 font-medium">
               Spieler
             </Link>
+            <Link href="/berlin" className="hover:text-primary transition-colors duration-200 font-medium font-black text-rose-500">
+              Berlin
+            </Link>
             <Link href="/scores" className="hover:text-primary transition-colors duration-200 font-medium">
               Tabellen
             </Link>
@@ -277,6 +280,13 @@ export default function Menubar() {
                 className="block px-4 py-2 hover:bg-muted rounded-md transition-colors font-medium"
               >
                 Spieler
+              </Link>
+              <Link
+                href="/berlin"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block px-4 py-2 hover:bg-muted rounded-md transition-colors font-medium text-rose-500 font-bold"
+              >
+                Berlin
               </Link>
               <Link
                 href="/scores"

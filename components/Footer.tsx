@@ -29,6 +29,7 @@ export default function Footer() {
             <Link href="/scores" className="hover:text-primary transition-colors">Tabellen</Link>
             <Link href="/tournaments" className="hover:text-primary transition-colors">Spielplan</Link>
             <Link href="/training" className="hover:text-primary transition-colors">Training</Link>
+            <Link href="/live" className="hover:text-primary transition-colors">Live</Link>
             <Link href="/search" className="hover:text-primary transition-colors">Suche</Link>
             <Link href="/privacy" className="hover:text-primary transition-colors">Datenschutz</Link>
             <Link href="/tos" className="hover:text-primary transition-colors">AGB</Link>
