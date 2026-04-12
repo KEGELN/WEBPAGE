@@ -107,6 +107,9 @@ export default function Menubar() {
             <Link href="/live" className="hover:text-primary transition-colors duration-200 font-medium">
               Live
             </Link>
+            <Link href="/compare" className="hover:text-primary transition-colors duration-200 font-medium">
+              Vergleich
+            </Link>
             <div className="relative">
               <button
                 type="button"

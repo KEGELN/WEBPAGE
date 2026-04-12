@@ -86,7 +86,7 @@ function supabaseMirrorStore() {
 
       return {
         players: (playersData || []).map((row: Record<string, unknown>) => ({
-          id: String(row.player_key || ''),
+          id: Buffer.from(String(row.player_key || '')).toString('base64url'),
           rawId: String(row.player_key || ''),
           name: String(row.player_name || ''),
           club: String(row.club_name ?? ''),

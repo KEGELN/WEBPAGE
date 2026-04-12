@@ -29,8 +29,9 @@ export async function GET(request: NextRequest) {
       for (const club of localClubs) {
         if (!existingClubNames.has(club.name_klub.toLowerCase())) {
           results.clubs.push({
+            id: Buffer.from(club.name_klub).toString('base64url'),
             name: club.name_klub,
-            gameCount: 0, // We don't have game count for local clubs yet without a heavy query
+            gameCount: 0,
             lastGameDate: ''
           });
         }

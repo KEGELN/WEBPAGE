@@ -1,3 +1,9 @@
+!!! Make a privacy policy GDPR and ccpa  compliant
+also make TOS
+Data and compliance
+check name infringeement
+
+
 Erledigt:
 - Button im Räumen: "Fertig geräumt" speichert automatisch alle noch stehenden Kegel.
 - Button für 9 / Strike im Volle.

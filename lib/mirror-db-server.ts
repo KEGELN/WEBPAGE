@@ -80,6 +80,7 @@ export function searchMirror(query: string) {
 
   return {
     players: players.map((row) => ({
+      id: Buffer.from(row.player_name ?? '').toString('base64url'),
       name: row.player_name ?? '',
       club: row.club_name ?? '',
       gameCount: Number(row.game_count ?? 0),
