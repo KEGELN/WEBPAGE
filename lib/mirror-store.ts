@@ -94,6 +94,7 @@ function supabaseMirrorStore() {
           lastGameDate: row.last_game_date ? String(row.last_game_date) : '',
         })),
         clubs: (clubsData || []).map((row: Record<string, unknown>) => ({
+          id: Buffer.from(String(row.club_name || '')).toString('base64url'),
           name: String(row.club_name || ''),
           gameCount: Number(row.game_count ?? 0),
           lastGameDate: row.last_game_date ? String(row.last_game_date) : '',

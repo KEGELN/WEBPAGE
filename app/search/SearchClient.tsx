@@ -43,12 +43,12 @@ export default function SearchClient() {
         }
         const payload = (await res.json()) as {
           players: Array<{ id: string; name: string; club: string; gameCount: number }>;
-          clubs: Array<{ name: string; gameCount: number }>;
+          clubs: Array<{ id: string; name: string; gameCount: number }>;
         };
 
         const formattedResults: SearchResult[] = [
           ...payload.clubs.map(club => ({
-            id: club.name,
+            id: club.id || club.name,
             type: 'Club' as const,
             name: club.name,
             gameCount: club.gameCount,

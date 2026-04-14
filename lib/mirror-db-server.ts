@@ -87,6 +87,7 @@ export function searchMirror(query: string) {
       lastGameDate: row.last_game_date ?? '',
     })),
     clubs: clubs.map((row) => ({
+      id: Buffer.from(row.club_name ?? '').toString('base64url'),
       name: row.club_name ?? '',
       gameCount: Number(row.game_count ?? 0),
       lastGameDate: row.last_game_date ?? '',
