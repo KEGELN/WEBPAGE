@@ -5,7 +5,7 @@ import Menubar from '@/components/menubar';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { User, Trophy, BarChart3, Search, ArrowRight, X, TrendingUp, Activity } from 'lucide-react';
+import { User, BarChart3, Search, ArrowRight, X, TrendingUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface PlayerStats {
@@ -29,9 +29,6 @@ export default function CompareClient() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectingFor, setSelectingFor] = useState<1 | 2 | null>(null);
-  const [predictionLoading, setPredictionLoading] = useState(false);
-  const [predictionResult, setPredictionResult] = useState<{ p1: number, p2: number } | null>(null);
-  const [predictionError, setPredictionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (player1Id) {
@@ -75,32 +72,6 @@ export default function CompareClient() {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  const predictWinChance = async () => {
-    if (!player1Data?.playerName || !player2Data?.playerName) return;
-    
-    setPredictionLoading(true);
-    setPredictionError(null);
-    try {
-      const p1 = player1Data.playerName;
-      const p2 = player2Data.playerName;
-      const res = await fetch(`/api/predict?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`);
-      const data = await res.json();
-      
-      if (data.error) {
-        setPredictionError(data.error);
-      } else {
-        setPredictionResult({
-          p1: data.prediction * 100,
-          p2: (1 - data.prediction) * 100
-        });
-      }
-    } catch (err) {
-      setPredictionError("Server konnte Vorhersage nicht berechnen.");
-    } finally {
-      setPredictionLoading(false);
-    }
-  };
 
   const StatRow = ({ label, val1, val2, higherIsBetter = true }: { label: string, val1: any, val2: any, higherIsBetter?: boolean }) => {
     const num1 = parseFloat(String(val1).replace(',', '.'));
@@ -332,85 +303,6 @@ export default function CompareClient() {
           </Card>
         )}
 
-        {/* AI Prediction Section */}
-        {player1Data && player2Data && (
-          <Card className="rounded-[3rem] border-primary/20 bg-primary/5 p-8 md:p-12 shadow-2xl overflow-hidden relative group">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-50" />
-            <div className="relative z-10 flex flex-col items-center text-center space-y-8">
-              <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 rounded-full bg-primary/20 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-primary">
-                  <Activity size={14} />
-                  AI Performance Predictor
-                </div>
-                <h3 className="text-3xl font-black tracking-tighter uppercase">KI-Siegvorhersage</h3>
-                <p className="text-sm font-medium text-muted-foreground max-w-md">
-                   Basierend auf ELO-Rating, historischem Durchschnitt und aktuellen Leistungstrends.
-                </p>
-              </div>
-
-              {!predictionResult && !predictionLoading && (
-                <Button 
-                  onClick={predictWinChance}
-                  size="lg" 
-                  className="rounded-2xl h-16 px-12 font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all bg-primary text-primary-foreground"
-                >
-                  Siegchance berechnen
-                </Button>
-              )}
-
-              {predictionLoading && (
-                <div className="flex flex-col items-center gap-4 py-4">
-                  <LoadingSpinner />
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary animate-pulse">Analysiere Spielerprofile...</span>
-                </div>
-              )}
-
-              {predictionError && (
-                <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm font-bold uppercase tracking-tight">
-                   {predictionError}
-                </div>
-              )}
-
-              {predictionResult && (
-                <div className="w-full max-w-2xl animate-in fade-in zoom-in duration-500">
-                  <div className="flex justify-between items-end mb-4">
-                    <div className="text-left">
-                      <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-1">{player1Data.playerName}</div>
-                      <div className="text-4xl font-black text-primary tabular-nums">{predictionResult.p1.toFixed(1)}%</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-1">{player2Data.playerName}</div>
-                      <div className="text-4xl font-black text-foreground tabular-nums">{predictionResult.p2.toFixed(1)}%</div>
-                    </div>
-                  </div>
-                  
-                  <div className="h-4 w-full bg-muted rounded-full overflow-hidden flex border border-border/50">
-                    <div 
-                      className="h-full bg-primary transition-all duration-1000 ease-out"
-                      style={{ width: `${predictionResult.p1}%` }}
-                    />
-                    <div 
-                      className="h-full bg-border transition-all duration-1000 ease-out"
-                      style={{ width: `${predictionResult.p2}%` }}
-                    />
-                  </div>
-
-                  <div className="mt-8 text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground/60 leading-relaxed">
-                     Statistische Wahrscheinlichkeit basierend auf XGBoost Machine Learning Modell
-                  </div>
-                  
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => setPredictionResult(null)}
-                    className="mt-6 font-black text-[10px] uppercase tracking-widest text-muted-foreground hover:text-primary"
-                  >
-                    Neu berechnen
-                  </Button>
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
 
         {/* Empty State Instructions */}
         {!player1Data && !player2Data && (
