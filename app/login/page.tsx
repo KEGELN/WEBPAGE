@@ -1,32 +1,49 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Menubar from "@/components/menubar";
-import { Lock, UserCheck, AlertCircle, ShieldCheck, ArrowRight, User } from 'lucide-react';
+import { Lock, AlertCircle, ShieldCheck, ArrowRight, User, Loader2 } from 'lucide-react';
 import { db } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [username, setUsername] = useState('');
   const [tempPassword, setTempPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [tokenLoading, setTokenLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const auth = localStorage.getItem('player_auth');
-    if (auth) {
-      router.push('/training');
-    }
-  }, [router]);
+    if (auth) { router.push('/training'); return; }
+
+    const token = searchParams.get('token');
+    if (!token) return;
+
+    setTokenLoading(true);
+    fetch(`/api/training/magic-token?token=${encodeURIComponent(token)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('ungültig');
+        return res.json();
+      })
+      .then((player) => {
+        localStorage.setItem('player_auth', JSON.stringify(player));
+        router.push('/training');
+      })
+      .catch(() => {
+        setError('Dieser Login-Link ist ungültig oder abgelaufen. Bitte wende dich an deinen Trainer.');
+        setTokenLoading(false);
+      });
+  }, [router, searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
     try {
       const player = await db.loginPlayer(username.trim().toLowerCase(), tempPassword.trim().toUpperCase());
       if (player) {
@@ -41,6 +58,17 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (tokenLoading) {
+    return (
+      <div className="min-h-screen bg-[#fdf2f4] dark:bg-[#050505] flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
+          <p className="text-sm font-black uppercase tracking-widest text-muted-foreground">Automatisch anmelden…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#fdf2f4] dark:bg-[#050505] text-foreground selection:bg-primary/30">
@@ -132,5 +160,17 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#fdf2f4] dark:bg-[#050505] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   );
 }

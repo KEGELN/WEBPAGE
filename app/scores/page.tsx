@@ -71,6 +71,8 @@ export default function ScoresPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [standings, setStandings] = useState<StandingRow[]>([]);
+  const [prevStandings, setPrevStandings] = useState<StandingRow[]>([]);
+  const [prevPlayers, setPrevPlayers] = useState<PlayerRow[]>([]);
   const [standingsSort, setStandingsSort] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   const playerService = useMemo(() => new PlayerService(), []);
@@ -201,6 +203,21 @@ export default function ScoresPage() {
         const spieltagNr = Number(selectedSpieltag);
         const playerList = await playerService.getPlayerSchnitliste(selectedSeason, selectedLeague, spieltagNr);
         setPlayers(playerList);
+
+        let prevNr: number | null = null;
+        if (selectedSpieltag === '100') {
+          const nrs = spieltage.map((s) => Number(s.nr)).filter((n) => n < 100 && !Number.isNaN(n)).sort((a, b) => a - b);
+          if (nrs.length >= 2) prevNr = nrs[nrs.length - 2];
+        } else if (spieltagNr > 1) {
+          prevNr = spieltagNr - 1;
+        }
+
+        if (prevNr !== null) {
+          const prev = await playerService.getPlayerSchnitliste(selectedSeason, selectedLeague, prevNr);
+          setPrevPlayers(prev);
+        } else {
+          setPrevPlayers([]);
+        }
       } catch (err) {
         setError('Failed to load scores. Please try again.');
         console.error(err);
@@ -210,7 +227,7 @@ export default function ScoresPage() {
     };
 
     fetchData();
-  }, [playerService, selectedSeason, selectedLeague, selectedSpieltag]);
+  }, [playerService, selectedSeason, selectedLeague, selectedSpieltag, spieltage]);
 
   useEffect(() => {
     const fetchStandings = async () => {
@@ -218,20 +235,40 @@ export default function ScoresPage() {
       try {
         const spieltagNr = Number(selectedSpieltag);
         const data = await apiService.getStandingsRaw(selectedLeague, selectedSeason, spieltagNr, 0);
-        if (data.length > 0 || selectedSpieltag === '100') {
-          setStandings(data);
+        const current = data.length > 0 || selectedSpieltag === '100'
+          ? data
+          : await apiService.getStandingsRaw(selectedLeague, selectedSeason, 100, 0);
+        setStandings(current);
+
+        // Determine previous spieltag number for position-change arrows
+        let prevNr: number | null = null;
+        if (selectedSpieltag === '100') {
+          // "100" = latest — compare to second-to-last spieltag so we see actual changes
+          const nrs = spieltage.map((s) => Number(s.nr)).filter((n) => n < 100 && !Number.isNaN(n)).sort((a, b) => a - b);
+          console.log('[standings] spieltage nrs:', nrs);
+          if (nrs.length >= 2) prevNr = nrs[nrs.length - 2];
+        } else if (spieltagNr > 1) {
+          prevNr = spieltagNr - 1;
+        }
+        console.log('[standings] selectedSpieltag:', selectedSpieltag, 'prevNr:', prevNr);
+
+        if (prevNr !== null) {
+          const prev = await apiService.getStandingsRaw(selectedLeague, selectedSeason, prevNr, 0);
+          console.log('[standings] prevStandings sample:', prev.slice(0, 3).map((r) => [r[1], r[2]]));
+          setPrevStandings(prev);
         } else {
-          const fallback = await apiService.getStandingsRaw(selectedLeague, selectedSeason, 100, 0);
-          setStandings(fallback);
+          console.log('[standings] no prevNr, skipping prev fetch (spieltage may not be loaded yet)');
+          setPrevStandings([]);
         }
       } catch (err) {
         console.error('Error fetching standings:', err);
         setStandings([]);
+        setPrevStandings([]);
       }
     };
 
     fetchStandings();
-  }, [apiService, selectedSeason, selectedLeague, selectedSpieltag]);
+  }, [apiService, selectedSeason, selectedLeague, selectedSpieltag, spieltage]);
 
   const sortedPlayers = [...players].sort((a, b) => {
     if (!sortConfig) return 0;
@@ -305,6 +342,42 @@ export default function ScoresPage() {
       direction = 'desc';
     }
     setSortConfig({ key, direction });
+  };
+
+  const prevPositionMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of prevStandings) {
+      const name = String(row[2] ?? '').trim();
+      const pos = Number(row[1]);
+      if (name && !Number.isNaN(pos)) map.set(name, pos);
+    }
+    return map;
+  }, [prevStandings]);
+
+  const prevPlayerRankMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of prevPlayers) {
+      const name = String(p.name ?? '').trim();
+      const rank = Number(p.rank);
+      if (name && !Number.isNaN(rank)) map.set(name, rank);
+    }
+    return map;
+  }, [prevPlayers]);
+
+  const RankArrow = ({ name, currentRank }: { name: string; currentRank: number }) => {
+    const prev = prevPlayerRankMap.get(name.trim());
+    if (prev === undefined) return null;
+    if (prev > currentRank) return <span className="text-emerald-500 font-black text-base ml-1 leading-none" title={`War ${prev}.`}>▲</span>;
+    if (prev < currentRank) return <span className="text-rose-500 font-black text-base ml-1 leading-none" title={`War ${prev}.`}>▼</span>;
+    return <span className="text-foreground text-sm ml-1 leading-none">▬</span>;
+  };
+
+  const PositionArrow = ({ teamName, currentPos }: { teamName: string; currentPos: number }) => {
+    const prev = prevPositionMap.get(teamName.trim());
+    if (prev === undefined) return null;
+    if (prev > currentPos) return <span className="text-emerald-500 font-black text-base ml-1 leading-none" title={`War ${prev}.`}>▲</span>;
+    if (prev < currentPos) return <span className="text-rose-500 font-black text-base ml-1 leading-none" title={`War ${prev}.`}>▼</span>;
+    return <span className="text-foreground text-sm ml-1 leading-none">▬</span>;
   };
 
   const handleTeamScheduleClick = (teamName: string) => {
@@ -424,53 +497,62 @@ export default function ScoresPage() {
             {standings.length > 0 && (
               <section className="space-y-4">
                 <div className="flex items-center justify-between px-1">
-                  <h2 className="text-xl font-semibold">Tabelle</h2>
-                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                  <h2 className="text-2xl font-black tracking-tight uppercase">Tabelle</h2>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     Spieltag {selectedSpieltag === '100' ? 'Aktuell' : selectedSpieltag}
                   </span>
                 </div>
-                
+
                 <Card className="border border-border bg-gradient-to-br from-red-500/5 via-background to-rose-500/5 shadow-sm overflow-hidden">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead onClick={() => handleStandingsSort('position')} className="cursor-pointer hover:bg-accent/50 w-12 text-center">Pl.</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('team')} className="cursor-pointer hover:bg-accent/50 min-w-[16rem]">Mannschaft</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('spTotal')} className="cursor-pointer hover:bg-accent/50 text-center">Sp.</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('tpTotal')} className="cursor-pointer hover:bg-accent/50 text-center">TP</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('mpTotal')} className="cursor-pointer hover:bg-accent/50 text-center">MP</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('spHome')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">Sp.(H)</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('tpHome')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">TP(H)</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('mpHome')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">MP(H)</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('spAway')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">Sp.(A)</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('tpAway')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">TP(A)</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('mpAway')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">MP(A)</TableHead>
+                      <TableRow className="border-b-2">
+                        <TableHead onClick={() => handleStandingsSort('position')} className="cursor-pointer hover:bg-accent/50 w-14 text-center text-[10px] font-black uppercase tracking-widest">#</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('team')} className="cursor-pointer hover:bg-accent/50 min-w-[16rem] text-[10px] font-black uppercase tracking-widest">Mannschaft</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('spTotal')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest">Sp</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('tpTotal')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest">TP</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('mpTotal')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest">MP</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('spHome')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">Sp(H)</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('tpHome')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">TP(H)</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('mpHome')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">MP(H)</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('spAway')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">Sp(A)</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('tpAway')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">TP(A)</TableHead>
+                        <TableHead onClick={() => handleStandingsSort('mpAway')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">MP(A)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {standings.map((row, idx) => (
-                        <TableRow key={`${row[0]}-${idx}`}>
-                          <TableCell className="text-center font-medium">{displayValue(row[1])}</TableCell>
-                          <TableCell className="font-semibold">
+                      {standings.map((row, idx) => {
+                        const pos = Number(row[1]);
+                        const isTop3 = pos <= 3;
+                        return (
+                        <TableRow key={`${row[0]}-${idx}`} className={isTop3 ? 'bg-primary/5' : ''}>
+                          <TableCell className="text-center">
+                            <span className="inline-flex items-center justify-center gap-0.5">
+                              <span className={`font-black tabular-nums text-sm ${isTop3 ? 'text-primary' : ''}`}>{pos}</span>
+                              <PositionArrow teamName={String(row[2] ?? '')} currentPos={pos} />
+                            </span>
+                          </TableCell>
+                          <TableCell>
                             <button
                               type="button"
                               onClick={() => handleTeamScheduleClick(String(row[2] || ''))}
-                              className="text-left hover:text-primary transition-colors underline decoration-dotted underline-offset-4"
+                              className={`text-left font-bold hover:text-primary transition-colors ${isTop3 ? 'text-foreground' : 'text-foreground/80'}`}
                             >
                               {displayValue(row[2])}
                             </button>
                           </TableCell>
-                          <TableCell className="text-center">{displayValue(row[4])}</TableCell>
-                          <TableCell className="text-center font-mono">{`${row[7]}-${row[10]}`}</TableCell>
-                          <TableCell className="text-center font-bold">{displayValue(row[13])}</TableCell>
-                          <TableCell className="text-center hidden md:table-cell">{displayValue(row[5])}</TableCell>
-                          <TableCell className="text-center hidden md:table-cell font-mono">{`${row[8]}-${row[11]}`}</TableCell>
-                          <TableCell className="text-center hidden md:table-cell">{displayValue(row[14])}</TableCell>
-                          <TableCell className="text-center hidden md:table-cell">{displayValue(row[6])}</TableCell>
-                          <TableCell className="text-center hidden md:table-cell font-mono">{`${row[9]}-${row[12]}`}</TableCell>
-                          <TableCell className="text-center hidden md:table-cell">{displayValue(row[15])}</TableCell>
+                          <TableCell className="text-center tabular-nums text-sm">{displayValue(row[4])}</TableCell>
+                          <TableCell className="text-center tabular-nums text-sm font-medium">{`${row[7]}:${row[10]}`}</TableCell>
+                          <TableCell className="text-center tabular-nums font-black text-base text-primary">{displayValue(row[13])}</TableCell>
+                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell">{displayValue(row[5])}</TableCell>
+                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell font-medium">{`${row[8]}:${row[11]}`}</TableCell>
+                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell">{displayValue(row[14])}</TableCell>
+                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell">{displayValue(row[6])}</TableCell>
+                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell font-medium">{`${row[9]}:${row[12]}`}</TableCell>
+                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell">{displayValue(row[15])}</TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </Card>
@@ -506,7 +588,12 @@ export default function ScoresPage() {
                           className="cursor-pointer"
                           onClick={() => handlePlayerClick(player.name || '')}
                         >
-                          <TableCell className="text-center font-medium">{displayValue(player.rank)}</TableCell>
+                          <TableCell className="text-center">
+                            <span className="inline-flex items-center justify-center gap-0.5">
+                              <span className="font-black tabular-nums text-sm">{displayValue(player.rank)}</span>
+                              <RankArrow name={String(player.name ?? '')} currentRank={Number(player.rank)} />
+                            </span>
+                          </TableCell>
                           <TableCell className="font-semibold">{displayValue(player.name)}</TableCell>
                           <TableCell className="hidden lg:table-cell text-muted-foreground">{displayValue(player.category)}</TableCell>
                           <TableCell className="text-sm">{displayValue(player.club)}</TableCell>

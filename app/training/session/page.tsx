@@ -3,11 +3,11 @@
 import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { db, Player, Throw, Trainer, TrainingSession } from '@/lib/db';
-import { ArrowLeft, Check, CircleOff, Save, Trophy, Hash, Sparkles, X, Share2, MessageCircle, Send, Link as LinkIcon, ClipboardList, User as UserIcon, Target, Activity } from 'lucide-react';
+import { ArrowLeft, Check, CircleOff, Save, Trophy, Hash, Sparkles, X, Share2, MessageCircle, Send, Link as LinkIcon, ClipboardList, User as UserIcon, Target, Activity, Download } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { cn } from '@/lib/utils';
+import { cn, copyToClipboard } from '@/lib/utils';
 
 const pinLayout = [
   { id: 9, x: 2, y: 0 },
@@ -249,9 +249,9 @@ function TrainingSessionPageContent() {
     }
   };
 
-  const handleShare = (platform: 'wa' | 'tg' | 'copy') => {
+  const handleShare = async (platform: 'wa' | 'tg' | 'copy') => {
     if (!finishedSession) return;
-    
+
     const shareData = {
       n: finishedSession.playerName || 'Spieler',
       t: finishedSession.timestamp,
@@ -261,9 +261,21 @@ function TrainingSessionPageContent() {
       th: finishedSession.throws,
       ln: finishedSession.lanes
     };
-    
-    const encoded = btoa(JSON.stringify(shareData)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    const shareUrl = `${window.location.origin}/training/share?d=${encoded}`;
+
+    let shareUrl: string;
+    try {
+      const res = await fetch('/api/training/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(shareData),
+      });
+      const json = await res.json();
+      shareUrl = `${window.location.origin}/training/share?id=${json.id}`;
+    } catch {
+      const encoded = btoa(JSON.stringify(shareData)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      shareUrl = `${window.location.origin}/training/share?d=${encoded}`;
+    }
+
     const text = `Gut Holz! Ich habe gerade ${sessionTotal} Holz im ${finishedSession.type === 'game_120' ? '120er' : '30er'} Training geschoben. Schau es dir hier an: ${shareUrl}`;
 
     if (platform === 'wa') {
@@ -271,10 +283,32 @@ function TrainingSessionPageContent() {
     } else if (platform === 'tg') {
       window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(text)}`, '_blank');
     } else {
-      navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      copyToClipboard(shareUrl).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
     }
+  };
+
+  const handleExport = () => {
+    if (!finishedSession) return;
+    const rows: string[][] = [['Wurf', 'Bahn', 'Phase', 'Holz', 'Pins', 'Zeit']];
+    const allThrows = finishedSession.type === 'game_120' && finishedSession.lanes
+      ? Object.entries(finishedSession.lanes).flatMap(([lane, laneThrows]) =>
+          laneThrows.map((t, i) => ({ lane, nr: i + 1, t })))
+      : (finishedSession.throws ?? []).map((t, i) => ({ lane: '1', nr: i + 1, t }));
+    allThrows.forEach(({ lane, nr, t }, idx) => {
+      const phase = idx < 15 ? 'Volle' : 'Abräumen';
+      rows.push([String(idx + 1), lane, phase, String(t.pins.length), t.pins.join(';'), t.timestamp]);
+    });
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `training_${finishedSession.playerName}_${new Date(finishedSession.timestamp).toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   if (!isMounted || !player) return null;
@@ -387,22 +421,22 @@ function TrainingSessionPageContent() {
                   </Button>
                   
                   {isClearingPhase ? (
-                    <Button 
-                      variant="outline" 
-                      size="lg" 
+                    <Button
+                      variant="outline"
+                      size="lg"
                       className="rounded-2xl h-14 px-8 font-bold border-emerald-100 dark:border-emerald-900/30 text-emerald-600 bg-emerald-50/50 dark:bg-emerald-500/5 hover:bg-emerald-100 dark:hover:bg-emerald-500/10"
-                      onClick={() => saveSpecificPinsThrow(remainingPins)}
+                      onClick={() => setSelectedPins(remainingPins)}
                       disabled={remainingPins.length === 0 || isComplete}
                     >
                       <Sparkles size={18} className="mr-2" />
                       Räumen ({remainingPins.length})
                     </Button>
                   ) : (
-                    <Button 
-                      variant="outline" 
-                      size="lg" 
+                    <Button
+                      variant="outline"
+                      size="lg"
                       className="rounded-2xl h-14 px-8 font-bold border-amber-100 dark:border-amber-900/30 text-amber-600 bg-amber-50/50 dark:bg-amber-500/5 hover:bg-amber-100 dark:hover:bg-amber-500/10"
-                      onClick={() => saveSpecificPinsThrow(pinLayout.map(p => p.id))}
+                      onClick={() => setSelectedPins(pinLayout.map(p => p.id))}
                       disabled={isComplete}
                     >
                       <Trophy size={18} className="mr-2" />
@@ -565,9 +599,18 @@ function TrainingSessionPageContent() {
                 </div>
               </div>
 
-              <Button 
+              <button
+                type="button"
+                onClick={handleExport}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/10 hover:bg-white/20 transition-colors text-[10px] font-black uppercase tracking-widest text-white/70"
+              >
+                <Download size={14} />
+                Als CSV exportieren
+              </button>
+
+              <Button
                 onClick={() => router.push('/training')}
-                className="w-full h-14 rounded-2xl bg-white text-red-600 hover:bg-white/90 font-black uppercase tracking-widest text-xs mt-4 shadow-xl border-none"
+                className="w-full h-14 rounded-2xl bg-white text-red-600 hover:bg-white/90 font-black uppercase tracking-widest text-xs shadow-xl border-none"
               >
                 Fertig
               </Button>

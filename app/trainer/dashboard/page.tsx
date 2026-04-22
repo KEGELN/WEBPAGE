@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
-import { UserPlus, Users, Trash2, ChevronRight, BarChart3, LogOut, Search, User, History, Plus, ArrowLeft, MessageSquare, Send, Trophy } from 'lucide-react';
+import { UserPlus, Users, Trash2, ChevronRight, BarChart3, LogOut, Search, User, History, Plus, ArrowLeft, MessageSquare, Send, Trophy, Link2, Check } from 'lucide-react';
 import { Throw, Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -43,6 +43,7 @@ export default function TrainerDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedSession, setSelectedSession] = useState<TrainingSession | null>(null);
+  const [magicLinkCopied, setMagicLinkCopied] = useState<string | null>(null);
   const [mirrorPlayerNameInput, setMirrorPlayerNameInput] = useState('');
   const [mirrorProfile, setMirrorProfile] = useState<MirrorPlayerProfile | null>(null);
   const [mirrorLoading, setMirrorLoading] = useState(false);
@@ -109,6 +110,30 @@ export default function TrainerDashboard() {
     if (selectedPlayer?.id === id) {
       setSelectedPlayer(null);
       setShowMobileList(true);
+    }
+  };
+
+  const handleCopyMagicLink = async (player: Player) => {
+    try {
+      const res = await fetch('/api/training/magic-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: player.id }),
+      });
+      const { token } = await res.json() as { token: string };
+      const url = `${window.location.origin}/login?token=${token}`;
+      await navigator.clipboard.writeText(url).catch(() => {
+        const el = document.createElement('textarea');
+        el.value = url;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      });
+      setMagicLinkCopied(player.id);
+      setTimeout(() => setMagicLinkCopied(null), 3000);
+    } catch {
+      alert('Fehler beim Generieren des Login-Links.');
     }
   };
 
@@ -413,13 +438,26 @@ export default function TrainerDashboard() {
                         </div>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => handleDeletePlayer(selectedPlayer.id)}
-                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-medium text-destructive hover:bg-destructive/10 transition-all border border-destructive/20"
-                    >
-                      <Trash2 size={16} />
-                      Spieler löschen
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => handleCopyMagicLink(selectedPlayer)}
+                        className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          magicLinkCopied === selectedPlayer.id
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'
+                            : 'border-border hover:bg-muted text-foreground'
+                        }`}
+                      >
+                        {magicLinkCopied === selectedPlayer.id ? <Check size={14} /> : <Link2 size={14} />}
+                        {magicLinkCopied === selectedPlayer.id ? 'Link kopiert!' : 'Login-Link kopieren'}
+                      </button>
+                      <button
+                        onClick={() => handleDeletePlayer(selectedPlayer.id)}
+                        className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-medium text-destructive hover:bg-destructive/10 transition-all border border-destructive/20"
+                      >
+                        <Trash2 size={16} />
+                        Löschen
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 mt-6 sm:mt-8">
@@ -492,7 +530,13 @@ export default function TrainerDashboard() {
                           <button
                             key={s.id}
                             type="button"
-                            onClick={() => setSelectedSession(s)}
+                            onClick={() => {
+                              setSelectedSession(s);
+                              const total = getSessionTotal(s);
+                              const shareData = { n: s.playerName || 'Spieler', t: s.timestamp, m: s.type, s: total, id: s.id, th: s.throws, ln: s.lanes };
+                              const encoded = btoa(JSON.stringify(shareData)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+                              window.open(`/training/share?d=${encoded}`, '_blank');
+                            }}
                             className={`bg-muted/30 border rounded-xl p-4 text-left transition-all group ${
                               selectedSession?.id === s.id ? 'border-primary bg-primary/5 shadow-sm' : 'border-border hover:border-primary/30'
                             }`}

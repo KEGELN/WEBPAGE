@@ -33,18 +33,6 @@ type DuelLine = {
   awayMp: number;
 };
 
-const DEFAULT_MEMORIAL_TEXT =
-  'Wir gedenken an Jürgen Tippmann, der am 19.02.2026 von uns gegangen ist. Ruhe in Frieden.';
-
-const DEFAULT_STYLE_SAMPLE = `
-Auswärts weiterhin ungeschlagen – Bären bezwingen Tauer in hart umkämpftem Spiel
-
-Bevor wir mit dem Spielbericht beginnen: Wir gedenken an Jürgen Tippmann, der am 19.2.26 von uns gegangen ist. Jürgen war mehr als 20 Jahre Mitglied beim KSC-RW-Berliner Bär und hat in seiner aktiven Zeit das Kegeln geliebt und gelebt. Durch ihn schlug auch unser Tippi seine Wurzeln bei den Bären und trägt den sportlichen Erfolg weiter.
-
-Nun zum Spiel am letzten Sonntag. Erzähle den Spielverlauf als dramatische Geschichte über Startpaar, Mittelpaar und Schlusspaar. Nutze konkrete Duelle, Zwischenstände, Wendepunkte und starke Schlussbilder.
-
-Die Sprache soll emotional, lebendig und vereinsnah sein, mit klaren Zahlen und ohne erfundene Details. Abschluss mit Tabellenlage, Ausblick und Hashtags.
-`.trim();
 
 function normalizeText(value: string): string {
   return value.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -76,9 +64,6 @@ function isUnplayedResult(result: string): boolean {
   return parseScore(normalized) === null;
 }
 
-function toPromptJson(value: unknown): string {
-  return JSON.stringify(value, null, 2);
-}
 
 function sanitizeReportText(value: string): string {
   return String(value || '')
@@ -291,42 +276,6 @@ async function buildReportLocally(payload: {
   ].join('\n');
 }
 
-async function generateWithGrok(systemPrompt: string, userPrompt: string): Promise<string | null> {
-  const apiKey = process.env.GROK_API_KEY || process.env.XAI_API_KEY || '';
-  if (!apiKey) return null;
-
-  const apiUrl = process.env.GROK_API_URL || process.env.XAI_API_URL || 'https://api.x.ai/v1/chat/completions';
-  const model = process.env.GROK_MODEL || 'grok-3-mini';
-
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.45,
-      max_tokens: 2600,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const txt = await response.text();
-    throw new Error(`Grok request failed (${response.status}): ${txt.slice(0, 400)}`);
-  }
-
-  const json = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = json?.choices?.[0]?.message?.content?.trim();
-  return content || null;
-}
-
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
@@ -392,39 +341,7 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    const systemPrompt = [
-      'Du bist ein Redakteur für Kegel-Spielberichte.',
-      'Schreibe auf Deutsch im emotionalen Vereinsstil mit klarer Dramaturgie.',
-      'Format (ohne Markdown): Titelzeile, Gedenkabsatz, Startpaar, Mittelpaar, Schlusspaar, Tabellenlage & Ausblick, Hashtags.',
-      'Nutze konsequent konkrete Zahlen aus den gelieferten Daten (Ergebnis, Kegel, Volle, Abräumen, Fehlwürfe, Tabellenkontext, Restspiele).',
-      'Der Bericht muss ausführlich und detailliert sein (mindestens 900 Wörter).',
-      'Nutze die Strukturdaten in "matchFacts" und "stats" als primäre Faktenquelle.',
-      'KEIN Markdown: keine ###, keine **, keine Listenmarker.',
-      'Keine erfundenen Fakten. Wenn etwas fehlt, klar als fehlend benennen.',
-      'Halte dich eng am Stilbeispiel.',
-    ].join(' ');
-
-    const userPrompt = [
-      `Erzeuge einen ausführlichen Spielbericht für ${payload.ownTeam}.`,
-      `Gedenkabsatz (immer verwenden): ${DEFAULT_MEMORIAL_TEXT}`,
-      `Stilbeispiel:\n${DEFAULT_STYLE_SAMPLE}`,
-      `Daten:\n${toPromptJson(payload)}`,
-      'Wichtig: Bitte auch einen kurzen Abschnitt "Tabellenlage & Ausblick" mit Platzierung und verbleibenden Spielen schreiben.',
-    ]
-      .filter(Boolean)
-      .join('\n\n');
-
-    let reportText: string;
-    try {
-      const aiText = await generateWithGrok(systemPrompt, userPrompt);
-      reportText = sanitizeReportText(aiText || '');
-      if (!reportText) {
-        reportText = sanitizeReportText(await buildReportLocally(payload));
-      }
-    } catch (aiError) {
-      console.warn('Grok generation failed, using local fallback:', aiError);
-      reportText = sanitizeReportText(await buildReportLocally(payload));
-    }
+    const reportText = sanitizeReportText(await buildReportLocally(payload));
 
     return Response.json({
       ok: true,

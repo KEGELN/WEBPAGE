@@ -2,7 +2,8 @@
 import os
 import re
 import json
-import requests
+import urllib.request
+import urllib.error
 import subprocess
 import psycopg2
 from bs4 import BeautifulSoup
@@ -53,9 +54,20 @@ def fetch_url(url, referer=None):
     headers = {"User-Agent": UA}
     if referer:
         headers["Referer"] = referer
-    resp = requests.get(url, headers=headers, timeout=30)
-    resp.raise_for_status()
-    return resp
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        if resp.status >= 400:
+            raise urllib.error.HTTPError(url, resp.status, "HTTP Error", {}, None)
+
+        class _Resp:
+            def __init__(self, r):
+                self.status_code = r.status
+                self.content = r.read()
+                self.text = self.content.decode("utf-8", errors="replace")
+            def raise_for_status(self):
+                pass
+
+        return _Resp(resp)
 
 def split_points(val):
     val = str(val).replace(':', '-').replace('/', '-')

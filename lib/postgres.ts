@@ -25,17 +25,20 @@ function createPool(connectionString: string) {
   if (cached) return cached;
 
   const isVercel = process.env.VERCEL === '1';
-  
+
+  // Strip sslmode from the connection string — letting it coexist with the ssl
+  // config object causes pg to use Node's TLS chain validation which fails on
+  // Supabase's pooler self-signed cert. We handle SSL entirely via the config.
+  const cleanConnectionString = connectionString.replace(/[?&]sslmode=[^&]*/g, (m) =>
+    m.startsWith('?') ? '?' : ''
+  ).replace(/\?$/, '');
+
   const poolConfig: PoolConfig = {
-    connectionString,
+    connectionString: cleanConnectionString,
     max: isVercel ? 2 : 5,
     idleTimeoutMillis: isVercel ? 10000 : 30000,
     connectionTimeoutMillis: isVercel ? 5000 : 10000,
-    // Supabase and most cloud providers require SSL. 
-    // We disable certificate validation because Supabase uses self-signed/internal CA certificates for the direct pooler.
-    ssl: {
-      rejectUnauthorized: false,
-    },
+    ssl: { rejectUnauthorized: false },
   };
 
   const pool = new Pool(poolConfig);

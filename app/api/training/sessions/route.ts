@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await request.json();
-    if (!session.id || !session.playerId || !session.trainerEmail || !session.throws) {
+    if (!session.id || !session.playerId || !session.trainerEmail || (!session.throws && !session.lanes)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
     const saved = await getTrainingStore().saveSession(session);

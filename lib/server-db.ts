@@ -14,6 +14,27 @@ import type {
 const DB_PATH = path.join(process.cwd(), 'data', 'training_db.json');
 const DATA_DIR = path.join(process.cwd(), 'data');
 
+interface SharedSession {
+  id: string;
+  data: object;
+  createdAt: string;
+}
+
+interface Todo {
+  id: string;
+  text: string;
+  done: boolean;
+  priority: 'low' | 'medium' | 'high';
+  createdAt: string;
+  doneAt?: string;
+}
+
+interface MagicToken {
+  token: string;
+  playerId: string;
+  expiresAt: string;
+}
+
 interface TrainingDatabase {
   players: Player[];
   sessions: TrainingSession[];
@@ -23,6 +44,9 @@ interface TrainingDatabase {
   clubMembers: ClubMember[];
   clubMessages: ClubChatMessage[];
   clubPolls: ClubAttendancePoll[];
+  sharedSessions: SharedSession[];
+  todos: Todo[];
+  magicTokens: MagicToken[];
 }
 
 const INITIAL_DB: TrainingDatabase = {
@@ -34,6 +58,9 @@ const INITIAL_DB: TrainingDatabase = {
   clubMembers: [],
   clubMessages: [],
   clubPolls: [],
+  sharedSessions: [],
+  todos: [],
+  magicTokens: [],
 };
 
 if (!fs.existsSync(DATA_DIR)) {
@@ -82,6 +109,9 @@ function ensureDbShape(raw: Partial<TrainingDatabase>): TrainingDatabase {
     clubMembers: raw.clubMembers ?? [],
     clubMessages: raw.clubMessages ?? [],
     clubPolls: raw.clubPolls ?? [],
+    sharedSessions: raw.sharedSessions ?? [],
+    todos: raw.todos ?? [],
+    magicTokens: raw.magicTokens ?? [],
   };
 }
 
@@ -336,4 +366,84 @@ export const serverDb = {
     username: buildUsername(name, id),
     tempPassword: createTempPassword(),
   }),
+
+  getTodos: (): Todo[] => readDB().todos,
+
+  createTodo: (text: string, priority: Todo['priority'] = 'medium'): Todo => {
+    const db = readDB();
+    const todo: Todo = {
+      id: createId('todo'),
+      text: text.trim(),
+      done: false,
+      priority,
+      createdAt: new Date().toISOString(),
+    };
+    db.todos.unshift(todo);
+    writeDB(db);
+    return todo;
+  },
+
+  updateTodo: (id: string, patch: Partial<Pick<Todo, 'text' | 'done' | 'priority'>>): Todo | null => {
+    const db = readDB();
+    const idx = db.todos.findIndex((t) => t.id === id);
+    if (idx === -1) return null;
+    db.todos[idx] = {
+      ...db.todos[idx],
+      ...patch,
+      doneAt: patch.done === true ? new Date().toISOString() : patch.done === false ? undefined : db.todos[idx].doneAt,
+    };
+    writeDB(db);
+    return db.todos[idx];
+  },
+
+  deleteTodo: (id: string): void => {
+    const db = readDB();
+    db.todos = db.todos.filter((t) => t.id !== id);
+    writeDB(db);
+  },
+
+  saveSharedSession: (data: object): SharedSession => {
+    const db = readDB();
+    const entry: SharedSession = {
+      id: createId('share'),
+      data,
+      createdAt: new Date().toISOString(),
+    };
+    db.sharedSessions.push(entry);
+    // Keep only last 500 shared sessions
+    if (db.sharedSessions.length > 500) {
+      db.sharedSessions = db.sharedSessions.slice(-500);
+    }
+    writeDB(db);
+    return entry;
+  },
+
+  getSharedSession: (id: string): SharedSession | null => {
+    const db = readDB();
+    return db.sharedSessions.find((s) => s.id === id) ?? null;
+  },
+
+  createMagicToken: (playerId: string): string => {
+    const db = readDB();
+    // Invalidate any existing tokens for this player
+    db.magicTokens = db.magicTokens.filter((t) => t.playerId !== playerId);
+    const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+    db.magicTokens.push({ token, playerId, expiresAt });
+    writeDB(db);
+    return token;
+  },
+
+  redeemMagicToken: (token: string) => {
+    const db = readDB();
+    const entry = db.magicTokens.find((t) => t.token === token);
+    if (!entry) return null;
+    if (new Date(entry.expiresAt) < new Date()) {
+      db.magicTokens = db.magicTokens.filter((t) => t.token !== token);
+      writeDB(db);
+      return null;
+    }
+    const player = db.players.find((p) => p.id === entry.playerId) ?? null;
+    return player;
+  },
 };

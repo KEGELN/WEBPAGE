@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import csv
-import requests
+import json
+import urllib.request
+import urllib.parse
 
 BASE_URL = "https://skvb.sportwinner.de/php/skvb/service.php"
 HEADERS = {
@@ -10,9 +12,12 @@ HEADERS = {
 
 
 def _post(payload: dict, timeout: int = 30):
-    resp = requests.post(BASE_URL, data=payload, headers=HEADERS, timeout=timeout)
-    resp.raise_for_status()
-    return resp.json()
+    data = urllib.parse.urlencode(payload).encode()
+    req = urllib.request.Request(BASE_URL, data=data, headers=HEADERS, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        if resp.status >= 400:
+            raise urllib.error.HTTPError(BASE_URL, resp.status, "HTTP Error", {}, None)
+        return json.loads(resp.read().decode())
 
 
 def getSaisonArray():

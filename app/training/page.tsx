@@ -8,6 +8,7 @@ import { Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { copyToClipboard } from '@/lib/utils';
 
 type DetailedThrowRow = {
   sessionId: string;
@@ -213,19 +214,30 @@ export default function TrainingHomePage() {
   };
 
   const handleShare = async (session: TrainingSession) => {
-    // For guest mode, we encode the data. For real users, we could just send the ID.
-    // To keep it simple and universal, we encode essential session data.
     const shareData = {
       n: session.playerName || 'Spieler',
       t: session.timestamp,
       m: session.type,
       s: getSessionTotal(session),
-      id: session.id
+      id: session.id,
+      th: session.throws,
+      ln: session.lanes,
     };
-    
-    const encoded = btoa(JSON.stringify(shareData)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    const shareUrl = `${window.location.origin}/training/share?d=${encoded}`;
-    
+
+    let shareUrl: string;
+    try {
+      const res = await fetch('/api/training/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(shareData),
+      });
+      const json = await res.json();
+      shareUrl = `${window.location.origin}/training/share?id=${json.id}`;
+    } catch {
+      const encoded = btoa(JSON.stringify(shareData)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      shareUrl = `${window.location.origin}/training/share?d=${encoded}`;
+    }
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -233,17 +245,14 @@ export default function TrainingHomePage() {
           text: `Schau dir mein Training an: ${shareData.s} Holz im ${session.type === 'game_120' ? '120er' : '30er'} Modus!`,
           url: shareUrl,
         });
-      } catch (err) {
-        // Fallback to clipboard
-        await navigator.clipboard.writeText(shareUrl);
-        setCopiedId(session.id);
-        setTimeout(() => setCopiedId(null), 2000);
+        return;
+      } catch {
+        // fall through to clipboard
       }
-    } else {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopiedId(session.id);
-      setTimeout(() => setCopiedId(null), 2000);
     }
+    await copyToClipboard(shareUrl);
+    setCopiedId(session.id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const exportToCSV = () => {

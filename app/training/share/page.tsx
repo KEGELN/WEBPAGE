@@ -64,21 +64,33 @@ function ShareContent() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    const id = searchParams.get('id');
     const d = searchParams.get('d');
+
+    if (id) {
+      fetch(`/api/training/share?id=${encodeURIComponent(id)}`)
+        .then((res) => {
+          if (!res.ok) throw new Error('not found');
+          return res.json();
+        })
+        .then((decoded) => setData(decoded))
+        .catch(() => setError(true));
+      return;
+    }
+
     if (d) {
       try {
         const decoded = JSON.parse(atob(d.replace(/-/g, '+').replace(/_/g, '/')));
         const timer = setTimeout(() => setData(decoded), 0);
         return () => clearTimeout(timer);
-      } catch (err) {
-        console.error('Failed to decode share data:', err);
+      } catch {
         const timer = setTimeout(() => setError(true), 0);
         return () => clearTimeout(timer);
       }
-    } else {
-      const timer = setTimeout(() => setError(true), 0);
-      return () => clearTimeout(timer);
     }
+
+    const timer = setTimeout(() => setError(true), 0);
+    return () => clearTimeout(timer);
   }, [searchParams]);
 
   const allThrows = useMemo(() => {

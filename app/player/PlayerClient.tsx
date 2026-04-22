@@ -8,8 +8,34 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { User, Activity, Trophy, Search, Calendar, MapPin, ChevronDown, ChevronUp, History, TrendingUp, BarChart3, ArrowRight } from 'lucide-react';
+import { User, Activity, Trophy, Search, Calendar, MapPin, ChevronDown, ChevronUp, History, TrendingUp, BarChart3, ArrowRight, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+type EloHistoryRow = {
+  timestamp: number;
+  date: string;
+  elo: number;
+  avgKegel: number;
+  winRate: number;
+  result: number;
+  opponent: string;
+  team: string;
+  isHome: boolean;
+  leagueName: string;
+};
+
+type EloData = {
+  playerName: string;
+  currentElo: number;
+  peakElo: number;
+  minElo: number;
+  totalGames: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  avgKegel: number;
+  history: EloHistoryRow[];
+};
 
 interface PlayerStats {
   found: boolean;
@@ -134,6 +160,8 @@ export default function PlayerClient() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [openGameId, setOpenGameId] = useState<string | null>(null);
   const [gameDetails, setGameDetails] = useState<Record<string, GameDetailRow[]>>({});
+  const [eloData, setEloData] = useState<EloData | null>(null);
+  const [eloLoading, setEloLoading] = useState(false);
 
   const history = useMemo(() => playerStats?.history || [], [playerStats]);
   const graphValues = useMemo(() => history.slice(0, 15).reverse().map((entry) => parseHolz(entry.holz)), [history]);
@@ -161,6 +189,17 @@ export default function PlayerClient() {
     void fetchData();
     return () => { cancelled = true; };
   }, [playerId]);
+
+  useEffect(() => {
+    if (!playerStats?.playerName) return;
+    setEloData(null);
+    setEloLoading(true);
+    fetch(`/api/elo?name=${encodeURIComponent(playerStats.playerName)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setEloData(d as EloData | null))
+      .catch(() => setEloData(null))
+      .finally(() => setEloLoading(false));
+  }, [playerStats?.playerName]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -413,6 +452,111 @@ export default function PlayerClient() {
                 </div>
               </div>
             </Card>
+
+            {/* ELO Section */}
+            {(eloLoading || eloData) && (
+              <Card className="rounded-[2.5rem] border-border/50 bg-card p-8 shadow-xl overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-12 opacity-[0.03] -rotate-12 pointer-events-none">
+                  <Zap size={240} />
+                </div>
+                <div className="relative z-10 space-y-8">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-black tracking-tight flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-yellow-500/10 text-yellow-500"><Zap size={20} /></div>
+                        ELO RATING
+                      </h2>
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">Historisches Leistungsrating aus dem Datensatz</p>
+                    </div>
+                    {eloData && (
+                      <div className="text-right">
+                        <div className="text-[10px] font-black uppercase text-muted-foreground opacity-50 tracking-widest">Aktuell</div>
+                        <div className="text-3xl font-black tabular-nums text-yellow-500">{Math.round(eloData.currentElo)}</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {eloLoading && <div className="py-8 text-center text-sm font-bold text-muted-foreground">ELO-Daten werden geladen…</div>}
+
+                  {eloData && (
+                    <>
+                      {/* ELO quick stats */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {[
+                          { label: 'Aktuell', value: Math.round(eloData.currentElo), color: 'text-yellow-500' },
+                          { label: 'Peak',    value: Math.round(eloData.peakElo),    color: 'text-emerald-500' },
+                          { label: 'Min',     value: Math.round(eloData.minElo),     color: 'text-red-400' },
+                          { label: 'Win %',   value: `${(eloData.winRate * 100).toFixed(1)}%`, color: 'text-primary' },
+                        ].map((s) => (
+                          <div key={s.label} className="bg-muted/30 rounded-2xl p-4 text-center">
+                            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">{s.label}</div>
+                            <div className={`text-2xl font-black tabular-nums ${s.color}`}>{s.value}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* ELO over time chart */}
+                      {eloData.history.length > 1 && (() => {
+                        const vals = eloData.history.map((r) => r.elo);
+                        const W = 800; const H = 150;
+                        const min = Math.min(...vals); const max = Math.max(...vals);
+                        const span = Math.max(max - min, 1);
+                        const pts = vals.map((v, i) => {
+                          const x = (i / (vals.length - 1)) * W;
+                          const y = 10 + (1 - (v - min) / span) * 130;
+                          return `${x},${y}`;
+                        }).join(' ');
+                        const areaBottom = vals.map((v, i) => {
+                          const x = (i / (vals.length - 1)) * W;
+                          const y = 10 + (1 - (v - min) / span) * 130;
+                          return `${x},${y}`;
+                        });
+                        const areaPath = `M0,140 L${areaBottom.join(' L')} L${W},140 Z`;
+                        return (
+                          <div className="h-40 w-full bg-muted/5 rounded-3xl border border-border/30 p-4">
+                            <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full overflow-visible">
+                              <defs>
+                                <linearGradient id="eloGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                  <stop offset="0%" stopColor="#eab308" />
+                                  <stop offset="100%" stopColor="#f97316" />
+                                </linearGradient>
+                                <linearGradient id="eloArea" x1="0%" y1="0%" x2="0%" y2="100%">
+                                  <stop offset="0%" stopColor="#eab308" stopOpacity="0.15" />
+                                  <stop offset="100%" stopColor="#eab308" stopOpacity="0" />
+                                </linearGradient>
+                              </defs>
+                              <path d={areaPath} fill="url(#eloArea)" />
+                              <polyline fill="none" stroke="url(#eloGrad)" strokeWidth="3"
+                                strokeLinecap="round" strokeLinejoin="round" points={pts} />
+                            </svg>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Last 5 ELO matches */}
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Letzte 5 Spiele im Datensatz</div>
+                        {eloData.history.slice(-5).reverse().map((r, i) => (
+                          <div key={i} className="flex items-center justify-between rounded-xl bg-muted/20 px-4 py-2.5 text-sm">
+                            <div className="flex items-center gap-3">
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${r.result >= 1 ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
+                                {r.result >= 1 ? 'W' : 'L'}
+                              </span>
+                              <span className="font-medium truncate max-w-[180px]">vs {r.opponent}</span>
+                              <span className="text-[10px] text-muted-foreground">{r.isHome ? 'Heim' : 'Auswärts'}</span>
+                            </div>
+                            <div className="flex items-center gap-4 text-right shrink-0">
+                              <span className="text-[10px] text-muted-foreground tabular-nums">{r.date}</span>
+                              <span className="font-black tabular-nums text-yellow-500">{Math.round(r.elo)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </Card>
+            )}
 
             {/* Game History List */}
             <section className="space-y-8">

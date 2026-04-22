@@ -315,7 +315,7 @@ export default function ClubsPage() {
       let totalLeaguesChecked = 0;
 
       for (const season of seasonSorted) {
-        const leagues = await apiService.getLeagues(season.season_id, '0', '', '2');
+        const leagues = await apiService.getLeagues(season.season_id);
         totalLeaguesChecked += leagues.length;
 
         const seasonPlans = await mapWithConcurrency(
