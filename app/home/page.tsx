@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Menubar from "@/components/menubar";
-import { Trophy, Users, Calendar, Target, TrendingUp, ArrowRight, Play, Download, Search, Share2, Info, ChevronRight } from 'lucide-react';
+import { Trophy, Users, Calendar, Target, TrendingUp, ArrowRight, Play, Download, Search, Share2, Info, ChevronRight, Megaphone, Pin, Star } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useEffect, useState, useMemo } from 'react';
@@ -243,6 +243,49 @@ function HomeCalendar() {
   );
 }
 
+type AnnouncementType = 'info' | 'result' | 'event' | 'training';
+type Announcement = { id: string; title: string; body: string; type: AnnouncementType; pinned: boolean; createdAt: string; gameId?: string };
+
+const ANN_COLORS: Record<AnnouncementType, string> = {
+  info: 'text-blue-500 bg-blue-500/10',
+  result: 'text-emerald-500 bg-emerald-500/10',
+  event: 'text-orange-500 bg-orange-500/10',
+  training: 'text-purple-500 bg-purple-500/10',
+};
+const ANN_LABELS: Record<AnnouncementType, string> = {
+  info: 'Info', result: 'Ergebnis', event: 'Event', training: 'Training',
+};
+
+function AnnouncementsBar() {
+  const [items, setItems] = useState<Announcement[]>([]);
+  useEffect(() => {
+    fetch('/api/admin/announcements').then((r) => r.ok ? r.json() : []).then((d) => setItems(d as Announcement[])).catch(() => null);
+  }, []);
+  if (items.length === 0) return null;
+  const pinned = items.filter((a) => a.pinned);
+  const recent = items.filter((a) => !a.pinned).slice(0, 3);
+  const display = [...pinned, ...recent].slice(0, 5);
+  return (
+    <div className="space-y-3">
+      {display.map((a) => (
+        <div key={a.id} className={`rounded-2xl border px-5 py-4 flex gap-4 items-start ${a.pinned ? 'border-primary/30 bg-primary/5' : 'border-border/50 bg-card'}`}>
+          <div className="shrink-0 mt-0.5">
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${ANN_COLORS[a.type]}`}>
+              {a.pinned && <Pin size={9} />}
+              {ANN_LABELS[a.type]}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-black text-sm truncate">{a.title}</div>
+            <div className="text-xs text-muted-foreground font-medium mt-0.5 line-clamp-2">{a.body}</div>
+          </div>
+          <div className="text-[9px] font-black text-muted-foreground/50 shrink-0 mt-1">{new Date(a.createdAt).toLocaleDateString('de-DE')}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -283,19 +326,22 @@ export default function HomePage() {
               </p>
 
               {/* Central Search Bar */}
-              <div className="relative w-full max-w-2xl mt-8 group">
-                <form onSubmit={handleSearch}>
-                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                  <input 
-                    type="text" 
+              <div className="relative w-full max-w-2xl mt-10 group">
+                {/* Glow layer */}
+                <div className="absolute -inset-0.5 rounded-[1.75rem] bg-gradient-to-r from-primary/40 via-rose-500/30 to-primary/40 opacity-0 group-focus-within:opacity-100 blur-xl transition-all duration-500 pointer-events-none" />
+                <div className="absolute -inset-px rounded-[1.75rem] bg-gradient-to-r from-primary/20 via-rose-500/10 to-primary/20 opacity-0 group-focus-within:opacity-100 transition-all duration-300 pointer-events-none" />
+                <form onSubmit={handleSearch} className="relative">
+                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-200 z-10" />
+                  <input
+                    type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Spieler, Verein oder Liga suchen..." 
-                    className="w-full h-16 pl-14 pr-6 rounded-2xl border-2 border-border/50 bg-card/50 backdrop-blur-xl focus:outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all font-bold text-lg shadow-2xl"
+                    placeholder="Spieler, Verein oder Liga suchen…"
+                    className="relative w-full h-16 pl-14 pr-36 rounded-[1.5rem] border border-border/60 bg-card/80 backdrop-blur-xl focus:outline-none focus:border-primary/40 transition-all duration-300 font-semibold text-base shadow-[0_8px_32px_-8px_rgba(0,0,0,0.2)] dark:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)] group-focus-within:shadow-[0_12px_48px_-8px_rgba(220,38,38,0.25)]"
                   />
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:block">
-                    <Button type="submit" size="sm" className="rounded-xl h-10 px-4 font-black text-[10px] uppercase tracking-widest">
-                      Enter
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Button type="submit" size="sm" className="rounded-xl h-10 px-5 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-primary/30">
+                      Suchen
                     </Button>
                   </div>
                 </form>
@@ -345,6 +391,19 @@ export default function HomePage() {
           ))}
         </section>
 
+        {/* Announcements */}
+        <Reveal delay={150}>
+          <section className="space-y-6">
+            <div className="flex items-center gap-4 px-1">
+              <h2 className="text-4xl font-black tracking-tighter uppercase flex items-center gap-3">
+                <Megaphone className="text-primary h-8 w-8" /> Aktuelles
+              </h2>
+              <div className="h-px flex-1 bg-gradient-to-r from-border to-transparent hidden md:block" />
+            </div>
+            <AnnouncementsBar />
+          </section>
+        </Reveal>
+
         {/* Calendar and Stats Section */}
         <section className="grid gap-12 lg:grid-cols-[1.3fr_0.7fr]">
           <Reveal delay={200}>
@@ -386,9 +445,12 @@ export default function HomePage() {
                   </div>
                 </div>
                 
-                <div className="relative z-10 mt-16">
+                <div className="relative z-10 mt-16 space-y-3">
                   <Button asChild variant="secondary" className="w-full h-14 rounded-2xl font-black text-xs uppercase tracking-widest bg-white text-red-600 hover:bg-white/90 transition-all hover:scale-[1.02]">
                     <Link href="/scores">Detaillierte Analyse</Link>
+                  </Button>
+                  <Button asChild variant="secondary" className="w-full h-11 rounded-2xl font-black text-xs uppercase tracking-widest bg-white/15 text-white border border-white/20 hover:bg-white/25 transition-all">
+                    <Link href="/ksc"><Star className="mr-2 h-3 w-3" />Unser Verein – KSC Rot-Weiß</Link>
                   </Button>
                 </div>
               </Card>

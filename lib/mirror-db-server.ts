@@ -96,7 +96,7 @@ export function searchMirror(query: string) {
 }
 
 export function getMirrorPlayerProfile(name: string): MirrorPlayerProfile {
-  return runMirrorQuery(['player-profile', name, '--limit', '12']) as MirrorPlayerProfile;
+  return runMirrorQuery(['player-profile', name, '--limit', '50']) as MirrorPlayerProfile;
 }
 
 export function getMirrorClubProfile(name: string): MirrorClubProfile {

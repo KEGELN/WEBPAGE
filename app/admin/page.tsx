@@ -10,13 +10,22 @@ import { Button } from '@/components/ui/button';
 import {
   Shield, Database, Settings, FileText, Trash2, Save, ChevronRight,
   Activity, Code, Calendar, Plus, Check, Circle, AlertCircle, Clock,
-  BarChart3, ExternalLink,
+  BarChart3, ExternalLink, Megaphone, Pin, Trophy, Info, Star, Edit2, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type SeasonOption = { season_id: string; yearof_season: number };
 type LeagueOption = { liga_id: string; name_der_liga: string };
 type Todo = { id: string; text: string; done: boolean; priority: 'low' | 'medium' | 'high'; createdAt: string; doneAt?: string };
+type AnnouncementType = 'info' | 'result' | 'event' | 'training';
+type Announcement = { id: string; title: string; body: string; type: AnnouncementType; pinned: boolean; createdAt: string; updatedAt?: string; gameId?: string; tags?: string[] };
+
+const ANN_TYPE_META: Record<AnnouncementType, { label: string; color: string; bg: string; icon: typeof Info }> = {
+  info:     { label: 'Info',      color: 'text-blue-500',    bg: 'bg-blue-500/10',    icon: Info },
+  result:   { label: 'Ergebnis',  color: 'text-emerald-500', bg: 'bg-emerald-500/10', icon: Trophy },
+  event:    { label: 'Event',     color: 'text-orange-500',  bg: 'bg-orange-500/10',  icon: Calendar },
+  training: { label: 'Training',  color: 'text-purple-500',  bg: 'bg-purple-500/10',  icon: Star },
+};
 
 const PRIORITY_META: Record<Todo['priority'], { label: string; color: string; icon: typeof Circle }> = {
   low:    { label: 'Niedrig', color: 'text-muted-foreground', icon: Circle },
@@ -54,6 +63,16 @@ export default function AdminPage() {
   const [editText, setEditText] = useState('');
   const editRef = useRef<HTMLInputElement>(null);
 
+  // ── Announcements ──────────────────────────────────────────────────
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [annTitle, setAnnTitle] = useState('');
+  const [annBody, setAnnBody] = useState('');
+  const [annType, setAnnType] = useState<AnnouncementType>('info');
+  const [annPinned, setAnnPinned] = useState(false);
+  const [annGameId, setAnnGameId] = useState('');
+  const [annLoading, setAnnLoading] = useState(false);
+  const [editingAnn, setEditingAnn] = useState<Announcement | null>(null);
+
   // ── Init ───────────────────────────────────────────────────────────
   useEffect(() => {
     void apiService.getCurrentSeason().then((d) => {
@@ -62,6 +81,7 @@ export default function AdminPage() {
       if (data.length > 0) setSelectedSeason(String(data[0].season_id));
     });
     fetchTodos();
+    fetchAnnouncements();
   }, [apiService]);
 
   useEffect(() => {
@@ -137,6 +157,42 @@ export default function AdminPage() {
     });
     setEditingId(null);
     fetchTodos();
+  };
+
+  // ── Announcement helpers ───────────────────────────────────────────
+  const fetchAnnouncements = () => {
+    fetch('/api/admin/announcements').then((r) => r.json()).then((d) => setAnnouncements(d as Announcement[]));
+  };
+
+  const submitAnnouncement = async () => {
+    if (!annTitle.trim() || !annBody.trim()) return;
+    setAnnLoading(true);
+    const method = editingAnn ? 'PATCH' : 'POST';
+    const body = editingAnn
+      ? { id: editingAnn.id, title: annTitle, body: annBody, type: annType, pinned: annPinned }
+      : { title: annTitle, body: annBody, type: annType, pinned: annPinned, gameId: annGameId.trim() || undefined };
+    await fetch('/api/admin/announcements', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    setAnnTitle(''); setAnnBody(''); setAnnType('info'); setAnnPinned(false); setAnnGameId(''); setEditingAnn(null);
+    fetchAnnouncements();
+    setAnnLoading(false);
+  };
+
+  const deleteAnnouncement = async (id: string) => {
+    await fetch(`/api/admin/announcements?id=${id}`, { method: 'DELETE' });
+    fetchAnnouncements();
+  };
+
+  const startEditAnn = (a: Announcement) => {
+    setEditingAnn(a);
+    setAnnTitle(a.title); setAnnBody(a.body); setAnnType(a.type); setAnnPinned(a.pinned);
+  };
+
+  const autoResultAnnouncement = async () => {
+    if (!reportGameId.trim() || !reportText) return;
+    setAnnTitle(`Spielergebnis – Spiel #${reportGameId.trim()}`);
+    setAnnBody(reportText);
+    setAnnType('result');
+    setAnnGameId(reportGameId.trim());
   };
 
   // ── Report ─────────────────────────────────────────────────────────
@@ -355,11 +411,16 @@ export default function AdminPage() {
                 <input id="reportGameId" value={reportGameId} onChange={(e) => setReportGameId(e.target.value)}
                   className="h-12 w-full rounded-xl border border-border/50 bg-muted/20 px-4 font-bold focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" placeholder="z.B. 143427" />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button onClick={generateSpielbericht} disabled={reportLoading} className="rounded-xl font-bold shadow-lg">
                   {reportLoading ? 'Generiere…' : 'Bericht generieren'}
                 </Button>
                 <Button variant="outline" onClick={() => setReportText('')} className="rounded-xl font-bold">Leeren</Button>
+                {reportText && (
+                  <Button variant="outline" onClick={autoResultAnnouncement} className="rounded-xl font-bold gap-2 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/5">
+                    <Megaphone size={14} /> Als Ankündigung übernehmen
+                  </Button>
+                )}
               </div>
               {reportError && <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-xs font-bold">{reportError}</div>}
               {reportText && (
@@ -374,6 +435,123 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* ── Announcements ── */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-4 px-1">
+            <h2 className="text-2xl font-black tracking-tighter uppercase flex items-center gap-3">
+              <Megaphone className="text-primary h-6 w-6" /> Ankündigungen
+            </h2>
+            <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent hidden md:block" />
+            <span className="text-xs font-black text-muted-foreground tabular-nums">
+              {announcements.filter((a) => a.pinned).length} gepinnt · {announcements.length} gesamt
+            </span>
+          </div>
+
+          <div className="grid gap-8 lg:grid-cols-2">
+            {/* Create / Edit form */}
+            <Card className="rounded-[2.5rem] border-border/50 bg-card overflow-hidden shadow-xl">
+              <CardHeader className="p-6 border-b border-border/50">
+                <CardTitle className="text-lg font-black uppercase flex items-center gap-2">
+                  {editingAnn ? <><Edit2 size={16} className="text-primary" /> Ankündigung bearbeiten</> : <><Plus size={16} className="text-primary" /> Neue Ankündigung</>}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                <input
+                  value={annTitle}
+                  onChange={(e) => setAnnTitle(e.target.value)}
+                  placeholder="Titel…"
+                  className="w-full h-11 rounded-xl border border-border/50 bg-muted/20 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                />
+                <textarea
+                  value={annBody}
+                  onChange={(e) => setAnnBody(e.target.value)}
+                  placeholder="Inhalt der Ankündigung…"
+                  rows={5}
+                  className="w-full rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all resize-none"
+                />
+                <div className="flex gap-2 flex-wrap">
+                  <select
+                    value={annType}
+                    onChange={(e) => setAnnType(e.target.value as AnnouncementType)}
+                    className="h-10 rounded-xl border border-border/50 bg-muted/20 px-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/30 flex-1 min-w-[110px]"
+                  >
+                    <option value="info">Info</option>
+                    <option value="result">Ergebnis</option>
+                    <option value="event">Event</option>
+                    <option value="training">Training</option>
+                  </select>
+                  {!editingAnn && (
+                    <input
+                      value={annGameId}
+                      onChange={(e) => setAnnGameId(e.target.value)}
+                      placeholder="Game ID (optional)"
+                      className="h-10 rounded-xl border border-border/50 bg-muted/20 px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 flex-1 min-w-[120px]"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAnnPinned((p) => !p)}
+                    className={cn(
+                      'h-10 w-10 rounded-xl border flex items-center justify-center transition-colors',
+                      annPinned ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/20 border-border/50 text-muted-foreground'
+                    )}
+                    title="Anpinnen"
+                  >
+                    <Pin size={15} />
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={submitAnnouncement} disabled={annLoading || !annTitle.trim() || !annBody.trim()} className="rounded-xl font-bold flex-1">
+                    {annLoading ? 'Speichern…' : editingAnn ? 'Aktualisieren' : 'Veröffentlichen'}
+                  </Button>
+                  {editingAnn && (
+                    <Button variant="outline" onClick={() => { setEditingAnn(null); setAnnTitle(''); setAnnBody(''); setAnnType('info'); setAnnPinned(false); }} className="rounded-xl font-bold">
+                      <X size={16} />
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* List */}
+            <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+              {announcements.length === 0 && (
+                <div className="py-12 text-center text-sm text-muted-foreground font-medium rounded-2xl bg-muted/10 border border-dashed border-border">Noch keine Ankündigungen</div>
+              )}
+              {announcements.map((a) => {
+                const meta = ANN_TYPE_META[a.type];
+                const Icon = meta.icon;
+                return (
+                  <div key={a.id} className={cn(
+                    'rounded-2xl border p-5 space-y-2 transition-all',
+                    a.pinned ? 'border-primary/30 bg-primary/5 shadow-md' : 'border-border/50 bg-card'
+                  )}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest', meta.bg, meta.color)}>
+                          <Icon size={10} /> {meta.label}
+                        </span>
+                        {a.pinned && <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary"><Pin size={9} /> Gepinnt</span>}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button type="button" onClick={() => startEditAnn(a)} className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors">
+                          <Edit2 size={13} />
+                        </button>
+                        <button type="button" onClick={() => void deleteAnnouncement(a.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="font-black text-sm">{a.title}</div>
+                    <div className="text-xs text-muted-foreground font-medium line-clamp-2">{a.body}</div>
+                    <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">{new Date(a.createdAt).toLocaleDateString('de-DE')}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
 
         {/* Raw Data Inspector */}
         <section className="space-y-8">

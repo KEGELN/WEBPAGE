@@ -42,11 +42,9 @@ export default function BerlinPage() {
       setLoading(true);
       setError(null);
       try {
-        // We try to use our new unified API which now includes the local database leagues
+    
         const leagueId = league === 'berlinliga' ? 'berlinliga-local' : 'vereinsliga-local';
-        
-        // Fetch standings, games and spieltage in parallel from our DB
-        const [standingsRes, gamesRes, matchdaysRes] = await Promise.all([
+         const [standingsRes, gamesRes, matchdaysRes] = await Promise.all([
           fetch(`/api/sportwinner?command=GetTabelle&id_liga=${leagueId}&id_saison=11&nr_spieltag=100`),
           fetch(`/api/sportwinner?command=GetSpiel&id_liga=${leagueId}&id_saison=11`),
           fetch(`/api/sportwinner?command=GetSpieltagArray&id_liga=${leagueId}&id_saison=11`)

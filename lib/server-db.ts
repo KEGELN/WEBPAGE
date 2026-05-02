@@ -35,6 +35,18 @@ interface MagicToken {
   expiresAt: string;
 }
 
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  type: 'info' | 'result' | 'event' | 'training';
+  pinned: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  gameId?: string;
+  tags?: string[];
+}
+
 interface TrainingDatabase {
   players: Player[];
   sessions: TrainingSession[];
@@ -47,6 +59,7 @@ interface TrainingDatabase {
   sharedSessions: SharedSession[];
   todos: Todo[];
   magicTokens: MagicToken[];
+  announcements: Announcement[];
 }
 
 const INITIAL_DB: TrainingDatabase = {
@@ -61,6 +74,7 @@ const INITIAL_DB: TrainingDatabase = {
   sharedSessions: [],
   todos: [],
   magicTokens: [],
+  announcements: [],
 };
 
 if (!fs.existsSync(DATA_DIR)) {
@@ -112,6 +126,7 @@ function ensureDbShape(raw: Partial<TrainingDatabase>): TrainingDatabase {
     sharedSessions: raw.sharedSessions ?? [],
     todos: raw.todos ?? [],
     magicTokens: raw.magicTokens ?? [],
+    announcements: raw.announcements ?? [],
   };
 }
 
@@ -399,6 +414,40 @@ export const serverDb = {
   deleteTodo: (id: string): void => {
     const db = readDB();
     db.todos = db.todos.filter((t) => t.id !== id);
+    writeDB(db);
+  },
+
+  getAnnouncements: (): Announcement[] => readDB().announcements,
+
+  createAnnouncement: (params: Pick<Announcement, 'title' | 'body' | 'type' | 'pinned' | 'gameId' | 'tags'>): Announcement => {
+    const db = readDB();
+    const a: Announcement = {
+      id: createId('ann'),
+      title: params.title.trim(),
+      body: params.body.trim(),
+      type: params.type,
+      pinned: params.pinned ?? false,
+      gameId: params.gameId,
+      tags: params.tags ?? [],
+      createdAt: new Date().toISOString(),
+    };
+    db.announcements.unshift(a);
+    writeDB(db);
+    return a;
+  },
+
+  updateAnnouncement: (id: string, patch: Partial<Pick<Announcement, 'title' | 'body' | 'type' | 'pinned' | 'tags'>>): Announcement | null => {
+    const db = readDB();
+    const idx = db.announcements.findIndex((a) => a.id === id);
+    if (idx === -1) return null;
+    db.announcements[idx] = { ...db.announcements[idx], ...patch, updatedAt: new Date().toISOString() };
+    writeDB(db);
+    return db.announcements[idx];
+  },
+
+  deleteAnnouncement: (id: string): void => {
+    const db = readDB();
+    db.announcements = db.announcements.filter((a) => a.id !== id);
     writeDB(db);
   },
 

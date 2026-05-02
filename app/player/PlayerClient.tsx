@@ -90,10 +90,21 @@ function buildPolyline(values: number[], width: number, height: number) {
 function GameDetailsTable({ rows }: { rows: GameDetailRow[] }) {
   if (!rows || rows.length === 0) return null;
   
-  // Reuse existing logic from GameResultTable but modernized
-  const isSubstitution = (name: string | number | null | undefined) => {
-    const n = String(name || '');
-    return n.includes('(A)') || n.includes('(E)') || n.toLowerCase().includes('ab wurf');
+  const isEmpty = (v: GameDetailCell) => v === null || v === undefined || String(v).trim() === '' || String(v).trim() === '-';
+  const hasName = (v: GameDetailCell) => !isEmpty(v);
+  const hasKegel = (v: GameDetailCell) => !isEmpty(v) && Number.isFinite(Number(String(v).replace(',', '.'))) && Number(String(v).replace(',', '.')) > 0;
+
+  // Name-based markers (Sportwinner sometimes adds these)
+  const nameMarked = (v: GameDetailCell) => {
+    const s = String(v || '').toLowerCase();
+    return s.includes('(a)') || s.includes('(e)') || s.includes('ab wurf') || s.includes('auswechsel') || s.includes('einwechsel');
+  };
+
+  // Data-shape detection: substitution when one side has a player+kegel but the other side has no player at all
+  const getSubSides = (row: GameDetailRow) => {
+    const leftName = nameMarked(row[0]) || (hasName(row[0]) && hasKegel(row[5]) && !hasName(row[15]));
+    const rightName = nameMarked(row[15]) || (hasName(row[15]) && hasKegel(row[10]) && !hasName(row[0]));
+    return { leftSub: leftName, rightSub: rightName };
   };
 
   return (
@@ -114,22 +125,22 @@ function GameDetailsTable({ rows }: { rows: GameDetailRow[] }) {
         </TableHeader>
         <TableBody>
           {rows.map((row, idx) => {
-            const isNoteRow = row.length > 16 || (row?.[0] && row.slice(1).every((v) => v === '' || v === undefined));
+            const { leftSub, rightSub } = getSubSides(row);
+            const isNoteRow = !leftSub && !rightSub && (row.length > 16 || (row?.[0] && row.slice(1).every((v) => v === '' || v === undefined || v === null)));
             if (isNoteRow) return (
               <TableRow key={idx} className="bg-muted/10 border-none">
                 <TableCell colSpan={9} className="py-2 italic text-center text-muted-foreground">{row[0]}</TableCell>
               </TableRow>
             );
-            
+
             const isTotals = row?.[0] === '' && row?.[15] === '' && row?.[5] && row?.[10];
             if (isTotals) return null;
 
-            const leftSub = isSubstitution(row[0]);
-            const rightSub = isSubstitution(row[15]);
-
             return (
               <TableRow key={idx} className={cn("h-10", (leftSub || rightSub) && "bg-amber-500/5")}>
-                <TableCell className={cn("text-right font-medium", leftSub && "text-amber-600 italic")}>{String(row[0] || '-')}</TableCell>
+                <TableCell className={cn("text-right font-medium", leftSub && "text-amber-600 italic")}>
+                  {String(row[0] || '-')}{leftSub && <span className="ml-1 text-[9px] font-black uppercase tracking-widest opacity-60">(Sub)</span>}
+                </TableCell>
                 <TableCell className="text-center font-bold">{String(row[5] || '-')}</TableCell>
                 <TableCell className="text-center text-muted-foreground">{String(row[6] || '-')}</TableCell>
                 <TableCell className="text-center font-semibold text-green-600 dark:text-green-400">{String(row[7] || '-')}</TableCell>
@@ -137,7 +148,9 @@ function GameDetailsTable({ rows }: { rows: GameDetailRow[] }) {
                 <TableCell className="text-center font-semibold text-green-600 dark:text-green-400">{String(row[8] || '-')}</TableCell>
                 <TableCell className="text-center text-muted-foreground">{String(row[9] || '-')}</TableCell>
                 <TableCell className="text-center font-bold">{String(row[10] || '-')}</TableCell>
-                <TableCell className={cn("text-left font-medium", rightSub && "text-amber-600 italic")}>{String(row[15] || '-')}</TableCell>
+                <TableCell className={cn("text-left font-medium", rightSub && "text-amber-600 italic")}>
+                  {String(row[15] || '-')}{rightSub && <span className="ml-1 text-[9px] font-black uppercase tracking-widest opacity-60">(Sub)</span>}
+                </TableCell>
               </TableRow>
             );
           })}
@@ -162,9 +175,21 @@ export default function PlayerClient() {
   const [gameDetails, setGameDetails] = useState<Record<string, GameDetailRow[]>>({});
   const [eloData, setEloData] = useState<EloData | null>(null);
   const [eloLoading, setEloLoading] = useState(false);
+  const [sideFilter, setSideFilter] = useState<'all' | 'home' | 'away'>('all');
 
   const history = useMemo(() => playerStats?.history || [], [playerStats]);
+  const filteredHistory = useMemo(() => sideFilter === 'all' ? history : history.filter((e) => e.side === sideFilter), [history, sideFilter]);
   const graphValues = useMemo(() => history.slice(0, 15).reverse().map((entry) => parseHolz(entry.holz)), [history]);
+
+  const awayStat = useMemo(() => {
+    const away = history.filter((e) => e.side === 'away');
+    const home = history.filter((e) => e.side === 'home');
+    const awayWins = away.filter((e) => parseFloat(String(e.mp).replace(',', '.')) >= 1).length;
+    const homeWins = home.filter((e) => parseFloat(String(e.mp).replace(',', '.')) >= 1).length;
+    const awayAvg = away.length > 0 ? away.reduce((s, e) => s + parseHolz(e.holz), 0) / away.length : 0;
+    const homeAvg = home.length > 0 ? home.reduce((s, e) => s + parseHolz(e.holz), 0) / home.length : 0;
+    return { awayCount: away.length, homeCount: home.length, awayWins, homeWins, awayAvg, homeAvg };
+  }, [history]);
 
   useEffect(() => {
     if (!playerId) return;
@@ -338,6 +363,12 @@ export default function PlayerClient() {
 
         {loading && <div className="py-20"><LoadingSpinner label="Lade Profil..." size="lg" /></div>}
         {error && <div className="p-8 rounded-3xl bg-destructive/10 border border-destructive/20 text-destructive font-bold text-center">{error}</div>}
+        {!loading && !error && playerId && playerStats && !playerStats.found && (
+          <div className="p-8 rounded-3xl bg-muted/30 border border-border text-center space-y-2">
+            <div className="text-xl font-black uppercase tracking-tight">Spieler nicht gefunden</div>
+            <p className="text-muted-foreground font-medium">Kein Eintrag für diese ID im Mirror. Versuche eine andere Suche.</p>
+          </div>
+        )}
 
         {!loading && !error && playerId && playerStats?.found && (
           <div className="space-y-12">
@@ -389,6 +420,60 @@ export default function PlayerClient() {
               </Card>
             </div>
 
+            {/* Home vs Away Breakdown */}
+            {history.length > 0 && (
+              <Card className="rounded-[2.5rem] border-border/50 bg-card p-8 shadow-xl overflow-hidden">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500"><MapPin size={20} /></div>
+                  <div>
+                    <h2 className="text-2xl font-black tracking-tight">HEIM vs AUSWÄRTS</h2>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Leistungsvergleich nach Spielort</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { label: 'Heim', count: awayStat.homeCount, wins: awayStat.homeWins, avg: awayStat.homeAvg, color: 'blue' },
+                    { label: 'Auswärts', count: awayStat.awayCount, wins: awayStat.awayWins, avg: awayStat.awayAvg, color: 'orange' },
+                  ].map(({ label, count, wins, avg, color }) => (
+                    <div key={label} className={cn(
+                      "rounded-2xl p-5 space-y-4",
+                      color === 'blue' ? "bg-blue-500/5 border border-blue-500/20" : "bg-orange-500/5 border border-orange-500/20"
+                    )}>
+                      <div className={cn("text-[10px] font-black uppercase tracking-widest", color === 'blue' ? "text-blue-600 dark:text-blue-400" : "text-orange-600 dark:text-orange-400")}>{label}</div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">Spiele</div>
+                          <div className="text-2xl font-black tabular-nums">{count}</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">Siege</div>
+                          <div className="text-2xl font-black tabular-nums text-emerald-500">{wins}</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-1">Ø Holz</div>
+                          <div className="text-2xl font-black tabular-nums">{count > 0 ? avg.toFixed(1) : '-'}</div>
+                        </div>
+                      </div>
+                      {count > 0 && (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[9px] font-black uppercase text-muted-foreground">
+                            <span>Siegrate</span>
+                            <span>{((wins / count) * 100).toFixed(0)}%</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full transition-all", color === 'blue' ? "bg-blue-500" : "bg-orange-500")}
+                              style={{ width: `${(wins / count) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
             {/* Performance Graph */}
             <Card className="rounded-[2.5rem] border-border/50 bg-card p-8 shadow-xl overflow-hidden relative">
               <div className="absolute top-0 right-0 p-12 opacity-[0.03] -rotate-12 pointer-events-none">
@@ -428,7 +513,7 @@ export default function PlayerClient() {
                         className="drop-shadow-lg"
                       />
                       {graphValues.map((v, i) => {
-                         const x = (i / (graphValues.length - 1)) * 800;
+                         const x = graphValues.length === 1 ? 400 : (i / (graphValues.length - 1)) * 800;
                          const min = Math.min(...graphValues);
                          const max = Math.max(...graphValues, 1);
                          const y = 10 + (1 - (v - min) / (max - min || 1)) * 130;
@@ -560,19 +645,33 @@ export default function PlayerClient() {
 
             {/* Game History List */}
             <section className="space-y-8">
-              <div className="flex items-center justify-between px-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 gap-4">
                 <h2 className="text-3xl font-black tracking-tighter uppercase flex items-center gap-3">
                   <History className="text-primary h-8 w-8" />
                   SPIELHISTORIE
                 </h2>
-                <div className="h-px flex-1 mx-10 bg-gradient-to-r from-border/50 to-transparent hidden md:block" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">{history.length} EINTRÄGE</span>
+                <div className="flex items-center gap-2">
+                  {(['all', 'home', 'away'] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setSideFilter(f)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors",
+                        sideFilter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      )}
+                    >
+                      {f === 'all' ? 'Alle' : f === 'home' ? 'Heim' : 'Auswärts'}
+                    </button>
+                  ))}
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-2">{filteredHistory.length} EINTRÄGE</span>
+                </div>
               </div>
 
               <div className="grid gap-4">
-                {history.map((entry, idx) => {
+                {filteredHistory.map((entry, idx) => {
                   const isOpen = openGameId === entry.gameId;
-                  const resultColor = entry.mp === '1,0' ? 'text-emerald-500' : 'text-red-500';
+                  const mpVal = parseFloat(String(entry.mp).replace(',', '.'));
+                  const resultColor = mpVal >= 1 ? 'text-emerald-500' : mpVal > 0 ? 'text-yellow-500' : 'text-red-500';
                   
                   return (
                     <Card key={`${entry.gameId}-${idx}`} className={cn(
@@ -588,6 +687,12 @@ export default function PlayerClient() {
                             <div className="flex flex-wrap items-center gap-3">
                               <span className="px-3 py-1 rounded-full bg-muted text-[10px] font-black uppercase tracking-widest">
                                 {entry.spieltag || 'SPIEL'}
+                              </span>
+                              <span className={cn(
+                                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                                entry.side === 'home' ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-orange-500/10 text-orange-600 dark:text-orange-400"
+                              )}>
+                                {entry.side === 'home' ? 'Heim' : 'Auswärts'}
                               </span>
                               <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
                                 <Calendar className="h-3 w-3" /> {entry.date}

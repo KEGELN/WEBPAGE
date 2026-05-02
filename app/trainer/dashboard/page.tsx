@@ -120,8 +120,10 @@ export default function TrainerDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerId: player.id }),
       });
-      const { token } = await res.json() as { token: string };
-      const url = `${window.location.origin}/login?token=${token}`;
+      if (!res.ok) throw new Error('Server error');
+      const data = await res.json() as { token?: string };
+      if (!data.token) throw new Error('No token returned');
+      const url = `${window.location.origin}/login?token=${data.token}`;
       await navigator.clipboard.writeText(url).catch(() => {
         const el = document.createElement('textarea');
         el.value = url;
