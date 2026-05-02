@@ -10,6 +10,7 @@ import { readDefaultLeagueId } from '@/lib/client-settings';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select } from "@/components/ui/select";
+import { cn } from '@/lib/utils';
 
 type PlayerRow = {
   id?: string;
@@ -74,6 +75,7 @@ export default function ScoresPage() {
   const [prevStandings, setPrevStandings] = useState<StandingRow[]>([]);
   const [prevPlayers, setPrevPlayers] = useState<PlayerRow[]>([]);
   const [standingsSort, setStandingsSort] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [spielplan, setSpielplan] = useState<Array<{ teamHome: string; teamAway: string; result: string }>>([]);
 
   const playerService = useMemo(() => new PlayerService(), []);
   const apiService = useMemo(() => ApiService.getInstance(), []);
@@ -380,6 +382,78 @@ export default function ScoresPage() {
     return <span className="text-foreground text-sm ml-1 leading-none">▬</span>;
   };
 
+  // Load spielplan for form/S/U/N computation
+  useEffect(() => {
+    const fetchSpielplan = async () => {
+      if (!selectedSeason || !selectedLeague) return;
+      try {
+        const data = await apiService.getSpielplan(selectedSeason, selectedLeague);
+        setSpielplan(data.map(g => ({
+          teamHome: g.team_home,
+          teamAway: g.team_away,
+          result: g.result,
+        })));
+      } catch {
+        setSpielplan([]);
+      }
+    };
+    fetchSpielplan();
+  }, [apiService, selectedSeason, selectedLeague]);
+
+  // Compute per-team record from spielplan
+  const teamRecord = useMemo(() => {
+    const map = new Map<string, { s: number; u: number; n: number; form: ('W' | 'D' | 'L')[] }>();
+    for (const g of spielplan) {
+      if (!g.result || g.result.trim() === '– : –' || g.result.trim() === '- : -') continue;
+      const parts = g.result.split(':').map(p => p.trim());
+      if (parts.length < 2) continue;
+      const home = parseFloat(parts[0].replace(',', '.'));
+      const away = parseFloat(parts[1].replace(',', '.'));
+      if (isNaN(home) || isNaN(away)) continue;
+
+      const ensureTeam = (name: string) => {
+        if (!map.has(name)) map.set(name, { s: 0, u: 0, n: 0, form: [] });
+        return map.get(name)!;
+      };
+
+      const hRec = ensureTeam(g.teamHome);
+      const aRec = ensureTeam(g.teamAway);
+
+      if (home > away) {
+        hRec.s++; hRec.form.push('W');
+        aRec.n++; aRec.form.push('L');
+      } else if (home < away) {
+        hRec.n++; hRec.form.push('L');
+        aRec.s++; aRec.form.push('W');
+      } else {
+        hRec.u++; hRec.form.push('D');
+        aRec.u++; aRec.form.push('D');
+      }
+    }
+    return map;
+  }, [spielplan]);
+
+  // Club abbreviation: first letters of meaningful words
+  function getClubAbbr(name: string): string {
+    const words = name.replace(/\s+I+$/, '').trim().split(/\s+/);
+    const skips = new Set(['und', 'und', 'der', 'die', 'des', 'dem', 'den', 'ein', 'eine', 'von', 'für', 'Berliner']);
+    const significant = words.filter(w => !skips.has(w) && w.length > 1);
+    if (significant.length >= 2) return (significant[0][0] + significant[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  }
+
+  // Color for club badge based on position in list
+  const BADGE_COLORS = [
+    'bg-primary/15 text-primary',
+    'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+    'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+    'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400',
+    'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+    'bg-orange-500/15 text-orange-600 dark:text-orange-400',
+  ];
+
   const handleTeamScheduleClick = (teamName: string) => {
     if (!teamName) return;
     const params = new URLSearchParams();
@@ -392,97 +466,57 @@ export default function ScoresPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Menubar />
-      <main className="container mx-auto px-4 py-8 space-y-8">
-        <Card className="bg-gradient-to-br from-red-500/15 via-background to-rose-500/10 border-none shadow-md overflow-hidden">
-          <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between pb-2">
+      <main className="container mx-auto px-4 py-8 space-y-6">
+        {/* Page header + filters */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
             <div>
-              <CardDescription className="uppercase tracking-wide">Schnittliste</CardDescription>
-              <CardTitle className="text-3xl font-bold">Scores</CardTitle>
-              <CardDescription>Durchschnittswerte und Matchpunkte der Spieler.</CardDescription>
+              <div className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground mb-1">Kegel Hub</div>
+              <h1 className="text-4xl font-black tracking-tighter uppercase">Tabellen</h1>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Spieler</div>
-                <div className="text-base font-semibold text-foreground">{formatNumber(players.length)}</div>
+            {players.length > 0 && (
+              <div className="flex gap-3">
+                <div className="rounded-2xl border border-border bg-card px-4 py-2.5 shadow-sm text-center">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Spieler</div>
+                  <div className="text-xl font-black tabular-nums text-foreground">{formatNumber(players.length)}</div>
+                </div>
               </div>
-              <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Kategorien</div>
-                <div className="text-base font-semibold text-foreground">{formatNumber(categories.length)}</div>
-              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Saison</label>
+              <Select value={selectedSeason} onChange={(e) => handleSeasonChange(e.target.value)} className="h-9 text-xs font-bold rounded-xl w-[160px]">
+                <option value="">Alle Saisons</option>
+                {seasons.map((s) => <option key={s.season_id} value={s.season_id}>{s.yearof_season}</option>)}
+              </Select>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-4 items-end mt-4">
-              <div className="flex flex-col space-y-1.5">
-                <label htmlFor="seasonFilter" className="text-sm font-medium">Saison</label>
-                <Select
-                  id="seasonFilter"
-                  value={selectedSeason}
-                  onChange={(e) => handleSeasonChange(e.target.value)}
-                  className="w-[180px]"
-                >
-                  <option value="">Alle Saisons</option>
-                  {seasons.map((season) => (
-                    <option key={season.season_id} value={season.season_id}>
-                      {season.yearof_season}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="flex flex-col space-y-1.5">
-                <label htmlFor="leagueFilter" className="text-sm font-medium">Liga</label>
-                <Select
-                  id="leagueFilter"
-                  value={selectedLeague}
-                  onChange={(e) => setSelectedLeague(e.target.value)}
-                  className="w-[220px]"
-                >
-                  <option value="">Alle Ligen</option>
-                  {leagues.map((league) => (
-                    <option key={league.liga_id} value={league.liga_id}>
-                      {league.name_der_liga}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="flex flex-col space-y-1.5">
-                <label htmlFor="categoryFilter" className="text-sm font-medium">Kategorie</label>
-                <Select
-                  id="categoryFilter"
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-[180px]"
-                >
-                  <option value="">Alle Kategorien</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="flex flex-col space-y-1.5">
-                <label htmlFor="spieltagFilter" className="text-sm font-medium">Spieltag</label>
-                <Select
-                  id="spieltagFilter"
-                  value={selectedSpieltag}
-                  onChange={(e) => setSelectedSpieltag(e.target.value)}
-                  className="w-[180px]"
-                >
-                  <option value="100">Aktuell (100)</option>
-                  {spieltage.map((spieltag) => (
-                    <option key={spieltag.id} value={spieltag.nr}>
-                      {spieltag.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Liga</label>
+              <Select value={selectedLeague} onChange={(e) => setSelectedLeague(e.target.value)} className="h-9 text-xs font-bold rounded-xl w-[220px]">
+                <option value="">Alle Ligen</option>
+                {leagues.map((l) => <option key={l.liga_id} value={l.liga_id}>{l.name_der_liga}</option>)}
+              </Select>
             </div>
-          </CardContent>
-        </Card>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Spieltag</label>
+              <Select value={selectedSpieltag} onChange={(e) => setSelectedSpieltag(e.target.value)} className="h-9 text-xs font-bold rounded-xl w-[160px]">
+                <option value="100">Aktuell</option>
+                {spieltage.map((sp) => <option key={sp.id} value={sp.nr}>{sp.label}</option>)}
+              </Select>
+            </div>
+            {categories.length > 1 && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Kategorie</label>
+                <Select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="h-9 text-xs font-bold rounded-xl w-[160px]">
+                  <option value="">Alle</option>
+                  {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                </Select>
+              </div>
+            )}
+          </div>
+        </div>
 
         {loading && <LoadingSpinner label="Lade Scores..." />}
 
@@ -495,117 +529,216 @@ export default function ScoresPage() {
         {!loading && !error && (
           <div className="space-y-8">
             {standings.length > 0 && (
-              <section className="space-y-4">
-                <div className="flex items-center justify-between px-1">
-                  <h2 className="text-2xl font-black tracking-tight uppercase">Tabelle</h2>
+              <section className="space-y-3">
+                {/* League header */}
+                <div className="rounded-[2rem] border border-primary/20 bg-primary/5 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-xl font-black tracking-tighter uppercase">
+                      {leagues.find(l => l.liga_id === selectedLeague)?.name_der_liga ?? 'Tabelle'}
+                    </h2>
+                    <span className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground">
+                      Saison {seasons.find(s => s.season_id === selectedSeason)?.yearof_season ?? selectedSeason}
+                    </span>
+                  </div>
                   <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     Spieltag {selectedSpieltag === '100' ? 'Aktuell' : selectedSpieltag}
                   </span>
                 </div>
 
-                <Card className="border border-border bg-gradient-to-br from-red-500/5 via-background to-rose-500/5 shadow-sm overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-b-2">
-                        <TableHead onClick={() => handleStandingsSort('position')} className="cursor-pointer hover:bg-accent/50 w-14 text-center text-[10px] font-black uppercase tracking-widest">#</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('team')} className="cursor-pointer hover:bg-accent/50 min-w-[16rem] text-[10px] font-black uppercase tracking-widest">Mannschaft</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('spTotal')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest">Sp</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('tpTotal')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest">TP</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('mpTotal')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest">MP</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('spHome')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">Sp(H)</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('tpHome')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">TP(H)</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('mpHome')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">MP(H)</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('spAway')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">Sp(A)</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('tpAway')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">TP(A)</TableHead>
-                        <TableHead onClick={() => handleStandingsSort('mpAway')} className="cursor-pointer hover:bg-accent/50 text-center text-[10px] font-black uppercase tracking-widest hidden md:table-cell">MP(A)</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {standings.map((row, idx) => {
-                        const pos = Number(row[1]);
-                        const isTop3 = pos <= 3;
-                        return (
-                        <TableRow key={`${row[0]}-${idx}`} className={isTop3 ? 'bg-primary/5' : ''}>
-                          <TableCell className="text-center">
-                            <span className="inline-flex items-center justify-center gap-0.5">
-                              <span className={`font-black tabular-nums text-sm ${isTop3 ? 'text-primary' : ''}`}>{pos}</span>
-                              <PositionArrow teamName={String(row[2] ?? '')} currentPos={pos} />
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <button
-                              type="button"
-                              onClick={() => handleTeamScheduleClick(String(row[2] || ''))}
-                              className={`text-left font-bold hover:text-primary transition-colors ${isTop3 ? 'text-foreground' : 'text-foreground/80'}`}
+                <div className="rounded-[2rem] border border-border bg-card overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30">
+                          <th className="w-10 text-center py-3 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground">#</th>
+                          <th className="text-left py-3 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground min-w-[180px]">Verein</th>
+                          <th className="text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">SP</th>
+                          <th className="text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 hidden sm:table-cell">S</th>
+                          <th className="text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground hidden sm:table-cell">U</th>
+                          <th className="text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-rose-500 hidden sm:table-cell">N</th>
+                          <th className="text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground hidden md:table-cell">HOLZ+</th>
+                          <th className="text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground hidden md:table-cell">HOLZ−</th>
+                          <th className="text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground hidden lg:table-cell">SP</th>
+                          <th className="text-center py-3 px-3 text-[10px] font-black uppercase tracking-widest text-primary">MP</th>
+                          <th className="text-center py-3 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground hidden md:table-cell">Form</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {standings.map((row, idx) => {
+                          const pos = Number(row[1]);
+                          const teamName = String(row[2] ?? '');
+                          const rec = teamRecord.get(teamName);
+                          const form = rec ? rec.form.slice(-5) : [];
+                          // Promotion/relegation zone (top 2 up, bottom 2 down — approximate)
+                          const isPromotion = pos <= 2;
+                          const isPlayoff = pos === 3;
+                          const isRelegation = pos >= standings.length - 1;
+                          const abbr = getClubAbbr(teamName);
+                          const badgeColor = BADGE_COLORS[idx % BADGE_COLORS.length];
+
+                          return (
+                            <tr
+                              key={`${row[0]}-${idx}`}
+                              className={cn(
+                                'hover:bg-muted/40 transition-colors',
+                                isPromotion && 'bg-primary/[0.04]',
+                                isRelegation && 'bg-rose-500/[0.03]',
+                              )}
                             >
-                              {displayValue(row[2])}
-                            </button>
-                          </TableCell>
-                          <TableCell className="text-center tabular-nums text-sm">{displayValue(row[4])}</TableCell>
-                          <TableCell className="text-center tabular-nums text-sm font-medium">{`${row[7]}:${row[10]}`}</TableCell>
-                          <TableCell className="text-center tabular-nums font-black text-base text-primary">{displayValue(row[13])}</TableCell>
-                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell">{displayValue(row[5])}</TableCell>
-                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell font-medium">{`${row[8]}:${row[11]}`}</TableCell>
-                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell">{displayValue(row[14])}</TableCell>
-                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell">{displayValue(row[6])}</TableCell>
-                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell font-medium">{`${row[9]}:${row[12]}`}</TableCell>
-                          <TableCell className="text-center tabular-nums text-sm hidden md:table-cell">{displayValue(row[15])}</TableCell>
-                        </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </Card>
+                              {/* Position */}
+                              <td className="text-center py-3 px-3">
+                                <span className="inline-flex items-center justify-center gap-0.5">
+                                  <span className={cn(
+                                    'font-black tabular-nums',
+                                    pos === 1 && 'text-primary text-base',
+                                    pos <= 3 && pos > 1 && 'text-foreground',
+                                  )}>{pos}</span>
+                                  <PositionArrow teamName={teamName} currentPos={pos} />
+                                </span>
+                              </td>
+
+                              {/* Club name + badge */}
+                              <td className="py-3 px-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTeamScheduleClick(teamName)}
+                                  className="flex items-center gap-2.5 text-left group w-full"
+                                >
+                                  <span className={cn(
+                                    'inline-flex items-center justify-center w-7 h-7 rounded-lg text-[10px] font-black shrink-0',
+                                    badgeColor,
+                                  )}>{abbr}</span>
+                                  <span className={cn(
+                                    'font-bold group-hover:text-primary transition-colors text-sm truncate',
+                                    pos <= 3 ? 'text-foreground' : 'text-foreground/80',
+                                  )}>{teamName}</span>
+                                </button>
+                              </td>
+
+                              {/* SP */}
+                              <td className="text-center py-3 px-2 tabular-nums text-sm font-medium">{displayValue(row[4])}</td>
+
+                              {/* S U N */}
+                              <td className="text-center py-3 px-2 tabular-nums text-sm font-black text-emerald-600 dark:text-emerald-400 hidden sm:table-cell">
+                                {rec ? rec.s : '–'}
+                              </td>
+                              <td className="text-center py-3 px-2 tabular-nums text-sm font-medium text-muted-foreground hidden sm:table-cell">
+                                {rec ? rec.u : '–'}
+                              </td>
+                              <td className="text-center py-3 px-2 tabular-nums text-sm font-black text-rose-500 hidden sm:table-cell">
+                                {rec ? rec.n : '–'}
+                              </td>
+
+                              {/* HOLZ+ HOLZ- */}
+                              <td className="text-center py-3 px-2 tabular-nums text-sm font-medium text-emerald-700 dark:text-emerald-400 hidden md:table-cell">{displayValue(row[7])}</td>
+                              <td className="text-center py-3 px-2 tabular-nums text-sm font-medium text-rose-500 hidden md:table-cell">{displayValue(row[10])}</td>
+
+                              {/* SP (Spielpunkte) */}
+                              <td className="text-center py-3 px-2 tabular-nums text-sm font-medium hidden lg:table-cell">{`${row[7]}:${row[10]}`}</td>
+
+                              {/* MP — bold brand */}
+                              <td className="text-center py-3 px-3">
+                                <span className={cn(
+                                  'font-black tabular-nums',
+                                  pos <= 3 ? 'text-primary text-lg' : 'text-foreground text-base',
+                                )}>{displayValue(row[13])}</span>
+                              </td>
+
+                              {/* FORM squares */}
+                              <td className="text-center py-3 px-3 hidden md:table-cell">
+                                <span className="inline-flex items-center gap-0.5">
+                                  {form.length === 0 && <span className="text-muted-foreground/30 text-[10px]">–</span>}
+                                  {form.map((r, i) => (
+                                    <span key={i} className={cn(
+                                      'w-3.5 h-3.5 rounded-sm inline-block',
+                                      r === 'W' && 'bg-emerald-500',
+                                      r === 'D' && 'bg-amber-400',
+                                      r === 'L' && 'bg-rose-500',
+                                    )} title={r === 'W' ? 'Sieg' : r === 'D' ? 'Unentschieden' : 'Niederlage'} />
+                                  ))}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Legend */}
+                  <div className="border-t border-border px-5 py-3 flex items-center gap-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-[2px] bg-primary/40 inline-block" />
+                      Aufstieg / Playoff
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-[2px] bg-rose-500/30 inline-block" />
+                      Abstieg
+                    </span>
+                    <span className="ml-auto flex items-center gap-2">
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" /> Sieg</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-rose-500 inline-block" /> Niederlage</span>
+                    </span>
+                  </div>
+                </div>
               </section>
             )}
 
             {filteredPlayers.length > 0 && (
-              <section className="space-y-4">
-                <div className="flex items-center justify-between px-1">
-                  <h2 className="text-xl font-semibold">Einzelwertung</h2>
-                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                    {filteredPlayers.length} Spieler
-                  </span>
+              <section className="space-y-3">
+                <div className="flex items-center gap-4 px-1">
+                  <h2 className="text-2xl font-black tracking-tighter uppercase">Einzelwertung</h2>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{filteredPlayers.length} Spieler</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-border to-transparent hidden md:block" />
                 </div>
-                <Card className="border border-border bg-gradient-to-br from-red-500/5 via-background to-rose-500/5 shadow-sm overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead onClick={() => handleSort('rank')} className="cursor-pointer hover:bg-accent/50 w-12 text-center">Pl.</TableHead>
-                        <TableHead onClick={() => handleSort('name')} className="cursor-pointer hover:bg-accent/50 min-w-[14rem]">Spieler</TableHead>
-                        <TableHead onClick={() => handleSort('category')} className="cursor-pointer hover:bg-accent/50 hidden lg:table-cell">Kat.</TableHead>
-                        <TableHead onClick={() => handleSort('club')} className="cursor-pointer hover:bg-accent/50">Klub</TableHead>
-                        <TableHead onClick={() => handleSort('totalGames')} className="cursor-pointer hover:bg-accent/50 text-center">Sp.</TableHead>
-                        <TableHead onClick={() => handleSort('average')} className="cursor-pointer hover:bg-accent/50 text-center">∅</TableHead>
-                        <TableHead onClick={() => handleSort('points')} className="cursor-pointer hover:bg-accent/50 text-center">MP</TableHead>
-                        <TableHead onClick={() => handleSort('best')} className="cursor-pointer hover:bg-accent/50 text-center hidden md:table-cell">Best</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredPlayers.map((player, index) => (
-                        <TableRow 
-                          key={player.id ?? index} 
-                          className="cursor-pointer"
-                          onClick={() => handlePlayerClick(player.name || '')}
-                        >
-                          <TableCell className="text-center">
-                            <span className="inline-flex items-center justify-center gap-0.5">
-                              <span className="font-black tabular-nums text-sm">{displayValue(player.rank)}</span>
-                              <RankArrow name={String(player.name ?? '')} currentRank={Number(player.rank)} />
-                            </span>
-                          </TableCell>
-                          <TableCell className="font-semibold">{displayValue(player.name)}</TableCell>
-                          <TableCell className="hidden lg:table-cell text-muted-foreground">{displayValue(player.category)}</TableCell>
-                          <TableCell className="text-sm">{displayValue(player.club)}</TableCell>
-                          <TableCell className="text-center">{formatNumber(player.gamesTotal)}</TableCell>
-                          <TableCell className="text-center font-bold text-primary">{displayValue(player.avgTotal)}</TableCell>
-                          <TableCell className="text-center font-bold">{formatNumber(player.mpTotal)}</TableCell>
-                          <TableCell className="text-center hidden md:table-cell">{formatNumber(player.bestGame)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Card>
+                <div className="rounded-[2rem] border border-border bg-card overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30">
+                          <th onClick={() => handleSort('rank')} className="cursor-pointer hover:bg-accent/50 w-10 text-center py-3 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground">#</th>
+                          <th onClick={() => handleSort('name')} className="cursor-pointer hover:bg-accent/50 text-left py-3 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground min-w-[160px]">Spieler</th>
+                          <th onClick={() => handleSort('club')} className="cursor-pointer hover:bg-accent/50 text-left py-3 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground hidden sm:table-cell">Klub</th>
+                          <th onClick={() => handleSort('category')} className="cursor-pointer hover:bg-accent/50 text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground hidden lg:table-cell">Kat.</th>
+                          <th onClick={() => handleSort('totalGames')} className="cursor-pointer hover:bg-accent/50 text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sp.</th>
+                          <th onClick={() => handleSort('average')} className="cursor-pointer hover:bg-accent/50 text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-primary">Schnitt</th>
+                          <th onClick={() => handleSort('points')} className="cursor-pointer hover:bg-accent/50 text-center py-3 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground">MP</th>
+                          <th onClick={() => handleSort('best')} className="cursor-pointer hover:bg-accent/50 text-center py-3 px-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground hidden md:table-cell">Best</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {filteredPlayers.map((player, index) => {
+                          const rank = Number(player.rank);
+                          const isTop = rank <= 3;
+                          return (
+                            <tr
+                              key={player.id ?? index}
+                              onClick={() => handlePlayerClick(player.name || '')}
+                              className={cn(
+                                'cursor-pointer hover:bg-muted/40 transition-colors',
+                                isTop && 'bg-primary/[0.04]',
+                              )}
+                            >
+                              <td className="text-center py-3 px-3">
+                                <span className="inline-flex items-center justify-center gap-0.5">
+                                  <span className={cn('font-black tabular-nums', isTop && 'text-primary')}>{displayValue(player.rank)}</span>
+                                  <RankArrow name={String(player.name ?? '')} currentRank={rank} />
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 font-bold">{displayValue(player.name)}</td>
+                              <td className="py-3 px-3 text-sm text-muted-foreground hidden sm:table-cell">{displayValue(player.club)}</td>
+                              <td className="text-center py-3 px-2 text-xs text-muted-foreground hidden lg:table-cell">{displayValue(player.category)}</td>
+                              <td className="text-center py-3 px-2 tabular-nums">{formatNumber(player.gamesTotal)}</td>
+                              <td className="text-center py-3 px-2 font-black tabular-nums text-primary">{displayValue(player.avgTotal)}</td>
+                              <td className="text-center py-3 px-3 font-bold tabular-nums">{formatNumber(player.mpTotal)}</td>
+                              <td className="text-center py-3 px-2 tabular-nums hidden md:table-cell">{formatNumber(player.bestGame)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </section>
             )}
           </div>

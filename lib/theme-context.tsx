@@ -26,14 +26,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    document.documentElement.classList.remove('dark', 'default');
+    document.documentElement.classList.remove('dark', 'default', 'light');
 
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
-    }
-
-    if (theme === 'default') {
+    } else if (theme === 'default') {
       document.documentElement.classList.add('default');
+    } else if (theme === 'light') {
+      document.documentElement.classList.add('light');
     }
 
     localStorage.setItem('theme', theme);

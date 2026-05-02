@@ -387,22 +387,17 @@ export default function Menubar() {
               </form>
 
               {/* Account strip */}
-              <div className={cn('rounded-2xl p-3 flex items-center gap-3 mb-2', roleMeta.bg)}>
-                <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black', roleMeta.bg, roleMeta.color, 'border border-current/20')}>
+              <div className={cn('rounded-2xl p-3 flex items-center gap-3 mb-1', roleMeta.bg)}>
+                <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0', roleMeta.bg, roleMeta.color, 'border border-current/20')}>
                   {visibleAccount.kind === 'anonymous' ? <UserCircle2 size={16} /> : getInitials(visibleAccount.label)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={cn('text-[10px] font-black uppercase tracking-widest', roleMeta.color)}>{roleMeta.label}</div>
                   <div className="text-sm font-bold truncate">{visibleAccount.label}</div>
                 </div>
-                {visibleAccount.kind === 'anonymous' ? (
-                  <Link href="/login" onClick={closeAll}
-                    className="text-[10px] font-black uppercase tracking-widest bg-primary text-primary-foreground px-3 py-1.5 rounded-xl">
-                    Login
-                  </Link>
-                ) : (
+                {visibleAccount.kind !== 'anonymous' && (
                   <button type="button" onClick={handleLogout}
-                    className="text-[10px] font-black uppercase tracking-widest text-destructive bg-destructive/10 px-3 py-1.5 rounded-xl">
+                    className="text-[10px] font-black uppercase tracking-widest text-destructive bg-destructive/10 px-3 py-1.5 rounded-xl shrink-0">
                     Logout
                   </button>
                 )}
@@ -441,14 +436,34 @@ export default function Menubar() {
               </div>
 
               <div className="border-t border-border/50 pt-2 space-y-1">
-                {visibleAccount.kind !== 'anonymous' && (
+                {visibleAccount.kind === 'anonymous' ? (
+                  <>
+                    <Link href="/login" onClick={closeAll}
+                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-muted transition-colors">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                        <User size={14} className="text-emerald-500" />
+                      </div>
+                      Spieler Login
+                    </Link>
+                    <Link href="/trainer/login" onClick={closeAll}
+                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-muted transition-colors">
+                      <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                        <Shield size={14} className="text-blue-500" />
+                      </div>
+                      Trainer Login
+                    </Link>
+                  </>
+                ) : (
                   <Link href={visibleAccount.kind === 'trainer' ? '/trainer/dashboard' : '/training'} onClick={closeAll}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-muted">
-                    <LayoutDashboard size={14} className={roleMeta.color} /> Mein Bereich
+                    className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-muted transition-colors">
+                    <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', roleMeta.bg)}>
+                      <LayoutDashboard size={14} className={roleMeta.color} />
+                    </div>
+                    Mein Bereich
                   </Link>
                 )}
                 <Link href="/settings" onClick={closeAll}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-muted text-foreground/70">
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-muted text-foreground/70 transition-colors">
                   <Settings size={14} /> Einstellungen
                 </Link>
               </div>

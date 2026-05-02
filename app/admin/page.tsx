@@ -11,6 +11,7 @@ import {
   Shield, Database, Settings, FileText, Trash2, Save, ChevronRight,
   Activity, Code, Calendar, Plus, Check, Circle, AlertCircle, Clock,
   BarChart3, ExternalLink, Megaphone, Pin, Trophy, Info, Star, Edit2, X,
+  Bug, Send, BookOpen, Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -62,6 +63,13 @@ export default function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const editRef = useRef<HTMLInputElement>(null);
+
+  // ── Bug Report ────────────────────────────────────────────────────
+  const [bugTitle, setBugTitle] = useState('');
+  const [bugBody, setBugBody] = useState('');
+  const [bugSeverity, setBugSeverity] = useState<'low' | 'medium' | 'high'>('medium');
+  const [bugSent, setBugSent] = useState(false);
+  const [bugLoading, setBugLoading] = useState(false);
 
   // ── Announcements ──────────────────────────────────────────────────
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -582,6 +590,191 @@ export default function AdminPage() {
             ))}
           </div>
         </section>
+
+        {/* ── Docs & Guides ── */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-4 px-1">
+            <h2 className="text-2xl font-black tracking-tighter uppercase flex items-center gap-3">
+              <BookOpen className="text-primary h-6 w-6" /> Dokumentation & Anleitungen
+            </h2>
+            <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent hidden md:block" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                icon: Zap,
+                title: 'KI-Import',
+                desc: 'Trainingszettel fotografieren und automatisch als JSON importieren.',
+                href: '/training/import',
+                color: 'text-violet-500',
+                bg: 'bg-violet-500/10',
+              },
+              {
+                icon: Shield,
+                title: 'Login-Links',
+                desc: 'Spieler-Login-Links generieren: Trainer-Dashboard → Spieler auswählen → Link kopieren.',
+                href: '/trainer/dashboard',
+                color: 'text-blue-500',
+                bg: 'bg-blue-500/10',
+              },
+              {
+                icon: Megaphone,
+                title: 'Ankündigungen',
+                desc: 'Neuigkeiten veröffentlichen, die auf der Startseite erscheinen. Gepinnte Meldungen erscheinen zuerst.',
+                href: '#',
+                color: 'text-orange-500',
+                bg: 'bg-orange-500/10',
+              },
+              {
+                icon: Calendar,
+                title: 'ICS-Export',
+                desc: 'Startseite → Spielkalender → Mannschaft wählen → Download-Button für Kalender-Import.',
+                href: '/home',
+                color: 'text-emerald-500',
+                bg: 'bg-emerald-500/10',
+              },
+              {
+                icon: Code,
+                title: 'Spielbericht',
+                desc: 'Spiel-ID aus dem Sportwinner-System eingeben → automatisch formatierten Bericht generieren.',
+                href: '#',
+                color: 'text-primary',
+                bg: 'bg-primary/10',
+              },
+              {
+                icon: BarChart3,
+                title: 'Analyse',
+                desc: 'Tiefgehende Statistiken, ELO-Verläufe und Heim/Auswärts-Vergleiche pro Spieler.',
+                href: '/analyse',
+                color: 'text-red-500',
+                bg: 'bg-red-500/10',
+              },
+            ].map(({ icon: Icon, title, desc, href, color, bg }) => (
+              <a
+                key={title}
+                href={href}
+                className="rounded-2xl border border-border/50 bg-card p-5 hover:border-primary/30 hover:shadow-md transition-all group space-y-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn('p-2 rounded-xl w-fit', bg)}>
+                    <Icon size={16} className={color} />
+                  </div>
+                  <span className="font-black text-sm uppercase tracking-wide">{title}</span>
+                  <ExternalLink size={12} className="ml-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <p className="text-xs text-muted-foreground font-medium leading-relaxed">{desc}</p>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Bug Report ── */}
+        <section id="bug-report" className="space-y-6 scroll-mt-24">
+          <div className="flex items-center gap-4 px-1">
+            <h2 className="text-2xl font-black tracking-tighter uppercase flex items-center gap-3">
+              <Bug className="text-destructive h-6 w-6" /> Bug Report
+            </h2>
+            <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent hidden md:block" />
+          </div>
+
+          <Card className="rounded-[2.5rem] border-border/50 bg-card overflow-hidden shadow-xl">
+            <CardContent className="p-8 space-y-5">
+              {bugSent ? (
+                <div className="py-10 flex flex-col items-center gap-4 text-center animate-in fade-in zoom-in duration-300">
+                  <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                    <Check className="text-emerald-500 h-8 w-8" />
+                  </div>
+                  <div>
+                    <div className="text-xl font-black">Danke für den Bericht!</div>
+                    <p className="text-sm text-muted-foreground mt-1 font-medium">Der Bug wurde als Ankündigung gespeichert und wird geprüft.</p>
+                  </div>
+                  <Button variant="outline" onClick={() => { setBugSent(false); setBugTitle(''); setBugBody(''); setBugSeverity('medium'); }} className="rounded-xl font-bold">
+                    Weiteren Bug melden
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2 space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Kurzbeschreibung</label>
+                      <input
+                        value={bugTitle}
+                        onChange={(e) => setBugTitle(e.target.value)}
+                        placeholder="z.B. Spielersuche zeigt falsche Ergebnisse"
+                        className="w-full h-12 rounded-xl border border-border/50 bg-muted/20 px-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-destructive/30 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Schweregrad</label>
+                      <select
+                        value={bugSeverity}
+                        onChange={(e) => setBugSeverity(e.target.value as 'low' | 'medium' | 'high')}
+                        className="w-full h-12 rounded-xl border border-border/50 bg-muted/20 px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-destructive/30"
+                      >
+                        <option value="low">Niedrig – kosmetisch / minor</option>
+                        <option value="medium">Mittel – Funktion eingeschränkt</option>
+                        <option value="high">Hoch – Funktion komplett kaputt</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Seite / Bereich</label>
+                      <input
+                        placeholder="z.B. /player?id=xyz"
+                        className="w-full h-12 rounded-xl border border-border/50 bg-muted/20 px-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-destructive/30 transition-all"
+                        onBlur={(e) => setBugBody((b) => b ? b : `Seite: ${e.target.value}\n\n`)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Schritte zur Reproduktion / Details</label>
+                    <textarea
+                      value={bugBody}
+                      onChange={(e) => setBugBody(e.target.value)}
+                      placeholder="1. Öffne /player&#10;2. Suche nach …&#10;3. Klicke auf …&#10;→ Erwartet: …&#10;→ Passiert: …"
+                      rows={6}
+                      className="w-full rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-destructive/30 transition-all resize-none"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 flex-wrap">
+                    <Button
+                      disabled={bugLoading || !bugTitle.trim() || !bugBody.trim()}
+                      onClick={async () => {
+                        setBugLoading(true);
+                        const severityLabel = { low: '🟡 Niedrig', medium: '🟠 Mittel', high: '🔴 Hoch' }[bugSeverity];
+                        await fetch('/api/admin/announcements', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            title: `[Bug ${severityLabel}] ${bugTitle.trim()}`,
+                            body: bugBody.trim(),
+                            type: 'info',
+                            pinned: bugSeverity === 'high',
+                          }),
+                        });
+                        fetchAnnouncements();
+                        setBugSent(true);
+                        setBugLoading(false);
+                      }}
+                      className="rounded-xl font-black gap-2 bg-destructive hover:bg-destructive/90 shadow-lg shadow-destructive/20"
+                    >
+                      <Send size={15} />
+                      {bugLoading ? 'Wird gesendet…' : 'Bug melden'}
+                    </Button>
+                    <a
+                      href={`mailto:lennard.sdrojek@osz-lise-meitner.eu?subject=Kegel Hub Bug: ${encodeURIComponent(bugTitle)}&body=${encodeURIComponent(bugBody)}`}
+                      className="inline-flex items-center gap-2 rounded-xl border border-border/50 px-4 py-2 text-sm font-bold hover:bg-muted transition-colors"
+                    >
+                      <ExternalLink size={14} /> Per E-Mail melden
+                    </a>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
       </main>
     </div>
   );
