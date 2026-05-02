@@ -3,7 +3,8 @@
 import { Fragment, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import Menubar from "@/components/menubar";
-import { History, LogOut, Play, Trophy, BarChart3, FileDown, ArrowRight, TrendingUp, FileText, MessageSquare, ClipboardPenLine, Share2, Copy, Check } from 'lucide-react';
+import { History, LogOut, Play, Trophy, BarChart3, FileDown, ArrowRight, TrendingUp, FileText, MessageSquare, ClipboardPenLine, Share2, Copy, Check, Upload, Sparkles } from 'lucide-react';
+import Link from 'next/link';
 import { Trainer, TrainerMessage, db, Player, TrainingSession } from '@/lib/db';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from "@/components/ui/button";
@@ -516,6 +517,36 @@ export default function TrainingHomePage() {
               <ArrowRight className="text-muted-foreground group-hover:text-primary group-hover:translate-x-2 transition-all" />
             </button>
           </div>
+        </section>
+
+        {/* KI Import */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold px-1">Trainingszettel importieren</h2>
+          <Link
+            href="/training/import"
+            className="group flex items-center justify-between bg-card hover:border-primary transition-all p-8 rounded-3xl border border-border shadow-sm w-full text-left"
+          >
+            <div className="flex items-center gap-5">
+              <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                <Sparkles size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">KI-Import</h3>
+                <p className="text-muted-foreground text-sm mt-1 max-w-sm">
+                  Papierzettel fotografieren, Prompt an ChatGPT schicken, JSON einfügen — fertig.
+                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-primary">
+                    <Upload size={9} /> JSON Import
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted border border-border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    Standard &amp; 120er
+                  </span>
+                </div>
+              </div>
+            </div>
+            <ArrowRight className="text-muted-foreground group-hover:text-primary group-hover:translate-x-2 transition-all shrink-0" />
+          </Link>
         </section>
 
         {trainer && managedPlayers.length > 0 && (
